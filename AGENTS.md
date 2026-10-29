@@ -1,0 +1,15 @@
+# Engineering guidance
+
+- Keep the modular monolith. Phase 2.1 authorizes Better Auth and SMTP account email; Phase 2.2 authorizes session-owned saved listings; Phase 2.3 authorizes optional private advertiser profiles, not submissions or property permissions. Submissions, AI, geocoding, payments and other integrations need a new scoped requirement.
+- Preserve the original project vision in README; distinguish vision from implemented features.
+- Validate external filters through `src/modules/search/filters.ts`. All future natural-language adapters must produce that same structured contract.
+- Keep application SQL in module repositories or database scripts. Bind runtime values with Postgres.js tagged templates; `unsafe` is reserved for reviewed local migration files. Better Auth alone uses its maintained pg/Kysely adapter.
+- Enforce verified sessions server-side on every private page and write endpoint. Derive ownership from sessions, never request IDs. Account interests are non-exclusive preferences, not privileges. Do not link registration to fictional advertisers or listings. Never expose auth tables via public APIs or log credentials/tokens/email payloads.
+- Do not enable additional Better Auth endpoints without authorization review. Keep required verification, rate limits and origin checks. SMTP/secret configuration must fail closed; Mailpit is loopback-only development infrastructure.
+- Favorites reference listing IDs, never property IDs or cached listing snapshots. Read only published listing information, derive ownership from verified sessions, keep writes idempotent and origin-checked, and preserve database uniqueness, account limits and cascading deletion.
+- Advertiser profiles reuse non-demo advertiser entities with immutable account relationships. Self-declared types and active profile status confer no identity, ownership, tenancy, brokerage, admin, listing-management or publishing privileges. Never attach accounts to demo advertisers, accept status/ownership IDs through profile input, or treat advertiser association as management permission. Status changes are operator-only and database-audited.
+- Model physical properties, rooms/units and advertisements separately. Add forward-only migrations; never rewrite an applied migration.
+- All demonstration data and illustrations must be explicitly labeled. Never fabricate ratings, verification or real availability. Do not collect personal information with decorative forms.
+- Use semantic HTML, visible labels, keyboard focus states and mobile layouts. Reuse components and semantic CSS tokens. No UI library is needed.
+- Run lint, typecheck, unit tests, integration tests against an isolated seeded database, build, and Playwright journeys. See README for commands. Verify changed files and report checks that could not run.
+- Do not commit, push, deploy, change external services, delete database volumes or add secrets to Git without explicit authorization.

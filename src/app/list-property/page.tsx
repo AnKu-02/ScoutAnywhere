@@ -1,0 +1,3 @@
+import Link from "next/link";
+export const metadata = { title: "List a property" };
+export default function ListProperty() { return <div className="container section narrow"><p className="eyebrow">FOR OWNERS, BROKERS & DEVELOPERS</p><h1>Your property.<br/>The details that matter.</h1><div className="panel"><h2>Property submissions are not open yet</h2><p>In a later phase, advertisers will be able to list a room, a rental home or a residential property for sale. Phase 1 is a discovery preview using fictional demonstration data only.</p><p>We do not collect contact information, property documents or listing submissions here.</p><Link href="/flatshares" className="button">Explore demo properties</Link></div></div>; }

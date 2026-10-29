@@ -1,0 +1,35 @@
+# Architecture
+
+## Phase 2.3 update
+
+Private advertiser profiles reuse the existing `advertisers` entity rather than duplicating advertiser identity. An optional unique `owner_user_id` links a non-demo entity to one Better Auth account; a matching private `advertiser_profiles` extension holds city, description, editing status and timestamps. Composite foreign keys, unique constraints and immutable profile relationships prevent conflicting ownership. Registration/preferences do not create advertisers or grant capabilities. Profile updates use verified session identity, origin checks, strict Zod parsing and a database-backed write budget. Operator-controlled status changes have transactional audit events; suspended profiles cannot be edited. Marketplace search and demo advertiser projection remain unchanged.
+
+`src/modules/advertisers/authorization.ts` distinguishes profile editing from listing association. Listing association is not permission; listing management/publishing deliberately deny all requests until a separately scoped grant/review workflow exists. There is no submission API, property-claim endpoint, verification badge or public advertiser-profile endpoint. See `advertisers.md` for the future property-relationship proposal, verification boundaries, operator guidance and deletion implications.
+
+## Phase 2.2 update
+
+Saved Properties connects verified accounts to listing advertisements through a unique, timestamped relationship. Module repositories own parameterized reads/writes and database-backed account limits; API handlers enforce verified sessions, canonical origin, strict input and private/no-store responses. Public cards/details share a targeted client bookmark control, while `/dashboard/saved` server-fetches the current permitted listing projection. Only published records are disclosed; hidden relationships do not expose listing information and deletion cascades. See `saved-properties.md` for the schema, concurrency semantics, access policy and testing. No advertiser privileges or submission workflows are added.
+
+## Phase 2.1 update
+
+The marketplace remains a modular monolith with its original property/unit/listing schema and search contract. Better Auth now supplies account authentication via a server-only PostgreSQL adapter; profile/preferences use a separate parameterized Postgres.js repository. Private pages and profile writes enforce verified sessions server-side. Registration grants no advertiser association or privileged capability. See `authentication.md` for the current auth schema, email configuration, session model, ownership boundaries, abuse controls and deployment limitations. The historical read-only statements below describe Phase 1 marketplace discovery, not the new account write boundary. UI uses Electric Calm violet/lime tokens with local Space Grotesk and Plus Jakarta Sans.
+
+## Modular monolith
+App Router server components → shared Zod filter parser → listings repository → PostgreSQL/PostGIS. There is no public write API and no client-side database connection. GET forms store search state in URLs and work without client JavaScript. Future AI must translate text to the same filters; it cannot bypass validation or query the database independently. Geographic provider ports are interfaces only; basic locality search never depends on a geocoder.
+
+## Relational design
+`cities` → `locations` → `properties` → `units` → `listings`; `advertisers` attach to advertisements. Properties hold building/address/type and nullable WGS84 geography points. Units distinguish rooms from entire homes; BHK and carpet area do not describe individual rooms. Flatshares retain household size and house rules. Listings hold category, costs, availability, publication status and dates. Property images optionally belong to a unit; property amenities use a normalized join table. A composite unit foreign key and checks prevent sale/rental ads from advertising room units. Costs are nonnegative and rent/flatshares require deposits and availability. All prices use integer rupees, bounded below JavaScript’s safe-integer limit.
+
+Physical identity is independent of advertisement identity; the schema can retain listing history and support different ads on the same unit. Image paths are constrained to local assets for Phase 1; production uploads require an explicit redesign of storage/authorization/validation. No verification documents or personal contacts are stored. Future accounts can associate with advertisers through an authorization relation rather than conflating people and physical properties.
+
+## Queries and indexes
+Postgres.js parameterizes every external value. Ordering expressions are fixed code branches, not user SQL. Category/price and category/publication indexes support browsing, location/city indexes support locality matching and foreign-key traversal, and GiST supports future spatial queries. A single CTE statement returns count and paginated items in one snapshot, including pages beyond the results. IDs break ordering ties. Offset pagination is bounded to 10,000 pages; revisit with keyset pagination and EXPLAIN measurements at scale. Images and amenities are bounded correlated aggregates for this initial dataset; measure before optimizing.
+
+## Data lifecycle and safety
+Migration ledger + transactional advisory lock; scripts fail on errors and close connections. Seed only in non-production with explicit opt-in; it skips an already populated listings table and never truncates. Production data must be kept in a separate database, not mixed with fixtures. Runtime database failures show an unavailable state rather than fake search results. Invalid filters show actionable validation errors, missing details return 404. Environment credentials stay server-side. Headers disable framing/content sniffing and restrict browser permissions. Search is read-only; no inquiry or account data is accepted.
+
+## UI
+Temporary neutral green/stone tokens in the global stylesheet; Tailwind is installed/configured while reusable semantic CSS supplies the initial design. Server-rendered components provide cards, search, gallery, pricing, locality, amenities, advertisers, navigation and footer. PG fields are disabled with explicit notice; listing entry point describes deferred submissions. Demo assets are local SVG concept illustrations, not real property photographs.
+
+## Before production
+Separate runtime read-only credentials from migration credentials; require managed secret injection and database TLS according to hosting requirements. Add backups/recovery checks, connection-pool sizing, observability, deployment tests and abuse controls. Define authorization, retention/consent and moderation policies before enabling writes. Add CSP appropriate to the final deployment, assess accessibility with assistive technology, and benchmark realistic data volumes. No claim of production readiness or regulatory compliance is made by this foundation.

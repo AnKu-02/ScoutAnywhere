@@ -1,0 +1,1 @@
+export default function Loading() { return <div className="container section" role="status"><h2>Loading properties…</h2><p>Getting the details ready.</p></div>; }
