@@ -73,7 +73,7 @@ Production needs a dedicated runtime role. Grant only reviewed profile/name/type
 
 ## Local manual validation
 
-From `/home/chiragd/Desktop/ScoutAnywhere`, use existing ignored configuration and run `npm run db:migrate`. Start `npm run dev` only if port 3000 is unused. Use localhost consistently with the configured auth origin; Mailpit on localhost port 8025 captures verification mail locally rather than delivering to a real inbox.
+From the repository root, use existing ignored configuration and run `npm run db:migrate`. Start `npm run dev` only if port 3000 is unused. Use localhost consistently with the configured auth origin; Mailpit on localhost port 8025 captures verification mail locally rather than delivering to a real inbox.
 
 1. Register/verify a synthetic test account or sign in with an existing verified local account.
 2. Open Dashboard → Become an advertiser / Advertiser. Check that setup is optional and browsing/favorites still work without it.

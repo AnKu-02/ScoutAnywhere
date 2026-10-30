@@ -63,6 +63,17 @@ ALLOW_DEMO_SEED=true npm run db:seed
 npm run dev
 ```
 
+Copy `.env.example` only when `.env` does not already exist; preserve existing configuration. For account verification and password-reset testing, generate a local `BETTER_AUTH_SECRET` as described in `docs/authentication.md`. Never commit `.env`.
+
+**Apple Silicon Macs:** the pinned `postgis/postgis:17-3.5` image did not provide an ARM64 manifest during local validation. Start the documented services using Intel emulation instead:
+
+```sh
+DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose up -d --wait
+docker compose ps
+```
+
+This command-scoped setting does not change the Compose file. Docker Desktop must be running with emulation available. Both services should report healthy. PostgreSQL uses localhost port 5434; the Mailpit email viewer is at localhost port 8025. These containers provide supporting services only; start the Next.js application separately with `npm run dev`. See `docs/phase-2.3-mac-validation.md` for actual Mac validation results and local tooling limitations.
+
 Open localhost on port 3000. Docker binds the database to loopback port 5434. Credentials in Compose are local-development-only; never reuse them for production. `.env` is ignored; no environment secrets are sent to the browser. Use a separate non-production database for demonstration data. The migration user needs permission to install PostGIS; deployed runtime credentials need marketplace read access and narrowly scoped auth/preference writes, not migration or capability-grant privileges.
 
 Migrations run transactionally with an advisory lock and a migration ledger. Seed is transactional, refuses production mode, requires explicit opt-in, and skips if listings already exist; it never truncates existing data. `docker compose down` stops the database without deleting its volume. Do not delete volumes unless you intend to lose local data.

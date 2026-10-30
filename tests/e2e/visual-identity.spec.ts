@@ -31,7 +31,7 @@ for (const width of [375,768,1440]) {
         for(const source of sources) expect(source).toMatch(route==="/flatshares" ? /room\.svg|lavender-bedroom-workspace\.png/ : /living\.svg|building\.svg/);
       }
       if (route==="/rent") {
-        const summary=page.locator(".filter-disclosure summary");
+        const summary=page.getByRole("complementary",{name:"Property filters",exact:true}).locator(".filter-disclosure summary");
         await summary.click();
         await expect(page.getByRole("button",{name:"Apply filters"})).toBeHidden();
         await summary.press("Enter");

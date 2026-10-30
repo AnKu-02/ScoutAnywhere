@@ -82,7 +82,7 @@ test("advertiser setup, persistence, security boundaries and two-account isolati
     await page.reload();await expect(page.getByRole("button",{name:"Save advertiser profile",exact:true})).toBeDisabled();
     expect((await page.request.put("/api/advertiser-profile",{headers:{origin},data:input})).status()).toBe(403);
     await page.goto("/dashboard/saved");await expect(page.getByRole("heading",{name:"Saved Properties",exact:true})).toBeVisible();
-    await expect(page.getByText("You haven't saved any properties yet.")).toBeVisible();
+    await expect(page.getByRole("heading",{name:"You haven't saved any properties yet.",exact:true})).toBeVisible();
     expect((await sql`SELECT count(*)::int AS n FROM listings WHERE is_demo`)[0].n).toBe(24);
   }finally{await other?.close();await sql`DELETE FROM auth_user WHERE email IN (${email},${secondEmail})`;await sql.end();}
 });

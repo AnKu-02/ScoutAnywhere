@@ -35,7 +35,7 @@ Anonymous bookmark attempts go to `/sign-in?next=/listings/{id}` (URL encoded). 
 
 ## Local testing
 
-Use the existing ignored auth `.env` and loopback Mailpit configuration. From `/home/chiragd/Desktop/ScoutAnywhere`, run `docker compose up -d --wait`, `npm run db:migrate`, then use the existing development server (do not start a second against the same workspace). Apply migration 005 to the isolated seeded test database too. No new credentials or external services are needed.
+Use the existing ignored auth `.env` and loopback Mailpit configuration. From the repository root, run `docker compose up -d --wait`, `npm run db:migrate`, then use the existing development server (do not start a second against the same workspace). Apply migration 005 to the isolated seeded test database too. No new credentials or external services are needed.
 
 1. Visit any category and select Save property while signed out; confirm the sign-in prompt and internal listing return destination.
 2. Sign in with a verified local account (Mailpit verification viewer: localhost port 8025); confirm the listing is still unsaved until explicitly selected.

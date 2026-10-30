@@ -20,7 +20,7 @@ Seeker/owner/broker interests may overlap and convey no authorization or verific
 
 ## Local setup
 
-From `/home/chiragd/Desktop/ScoutAnywhere`:
+From the repository root:
 
 1. Install with `npm ci`. Copy `.env.example` to `.env` only if `.env` does not already exist; otherwise append the documented auth variables.
 2. Generate `BETTER_AUTH_SECRET` using `openssl rand -base64 48`; put it only in ignored `.env`. Set `BETTER_AUTH_URL=http://localhost:3000` and use that exact browser origin (not 127.0.0.1).

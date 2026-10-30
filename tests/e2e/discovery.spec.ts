@@ -2,13 +2,13 @@ import { test, expect } from "@playwright/test";
 test("homepage search, deterministic filters, and property details",async({page})=>{
   await page.goto("/");
   await expect(page.getByRole("heading",{level:1})).toContainText("A place that fits");
-  await page.getByLabel("City",{exact:true}).selectOption("Bengaluru");
-  await page.getByLabel("Locality",{exact:true}).fill("HSR Layout");
+  await page.getByRole("combobox",{name:"City",exact:true}).selectOption("Bengaluru");
+  await page.getByLabel("Locality",{exact:true}).filter({visible:true}).fill("HSR Layout");
   await page.getByRole("button",{name:"Find a place"}).click();
   await page.getByLabel("Maximum rent").fill("15000");
   await page.getByLabel("Furnishing",{exact:true}).selectOption("furnished");
   await page.getByRole("button",{name:"Apply filters"}).click();
-  await expect(page.getByText("1 demo property",{exact:true})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Search results",exact:true}).getByText("1 demo property",{exact:true})).toBeVisible();
   await page.getByRole("heading",{level:3}).getByRole("link").click();
   await expect(page.getByRole("heading",{name:"Clear costs. No guesswork."})).toBeVisible();
   await expect(page.getByText("FICTIONAL DEMO LISTING",{exact:false})).toBeVisible();
