@@ -46,6 +46,14 @@ Migration `006_advertiser_profiles.sql` reuses the existing advertiser entity wi
 
 Local Phase 2.3 validation: lint/typecheck/build passed, **97 unit tests**, **31 isolated-database integration tests**, **27 production browser tests** (one existing intentional duplicate skip), and the Electric Calm reference test passed. Advertiser desktop/mobile layouts were checked at 375px, 768px and 1440px.
 
+### Phase 2.4 — Private listing drafts
+
+Verified accounts with their own active advertiser profile can create, save incomplete, edit, delete and privately preview flatshare, rental and sale drafts at `/dashboard/listings`. Category-specific property/room/home/advertisement sections and self-declared relationships remain isolated from public marketplace data. Ownership constraints, optimistic versions, creation retry receipts, bounded requests and account write limits protect storage. Nothing is published, submitted for review or verified; photographs/uploads remain deferred. Run `npm run db:migrate` for forward migration 007, including your separate test database. See `docs/listing-drafts.md` for validation, access, concurrency, limits and local environment notes. Historical phase descriptions above do not override this scope.
+
+The local Docker Desktop restart blocker is resolved; PostgreSQL and Mailpit restarted healthy with existing volumes and demo records preserved. Continue using the Apple Silicon emulation command below when needed.
+
+Phase 2.4 local validation: lint, TypeScript and production build passed; **128 unit/API tests**, **40 integration tests**, **29 desktop/mobile browser tests** (one existing intentional skip), and **1 design-reference test** passed. Both databases retain all 24 demo listings and advertisers. See `docs/phase-2.4-validation.md` for results and limitations.
+
 ### Stack
 
 Next.js App Router, React, TypeScript, Tailwind CSS, Lucide, Zod, PostgreSQL 17 + PostGIS, Postgres.js, Vitest and Playwright. Exact installed versions are recorded in `package-lock.json`. Modular monolith; no AI or geocoding dependencies.

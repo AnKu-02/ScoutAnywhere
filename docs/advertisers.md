@@ -1,5 +1,7 @@
 # Phase 2.3 — Advertiser accounts and permission boundaries
 
+**Phase 2.4 update:** active own non-demo profiles now enable separate account-owned private listing drafts. They do not enable public listing management, publication, verification or claims over demo properties. Suspension blocks draft reads and writes too. See `listing-drafts.md`; the Phase 2.3 restrictions and proposed future workflow below are historical where superseded. The public `canManageListing` / `canPublishListing` gates still deny access.
+
 ## Implemented scope
 
 One Better Auth account can browse/save homes and optionally maintain one private advertiser profile. The selectable self-declared types are `owner` (Property Owner), `broker` (Broker / Real Estate Agent) and `tenant` (Existing Flatshare Tenant). They are descriptions of activity, not mutually exclusive account privileges or legal claims. This phase offers one primary advertiser type per profile; choosing a type does not change account interests or authentication. Developer records remain supported by the existing marketplace schema, but developer/agency setup, teams and organizations are not enabled.

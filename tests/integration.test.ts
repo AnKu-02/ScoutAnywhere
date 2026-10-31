@@ -6,6 +6,8 @@ import { savedCollection, savedListingIds, setSavedListing } from "../src/module
 import { advertiserProfile,saveAdvertiserProfile } from "../src/modules/advertisers/repository";
 import { canEditAdvertiserProfile,isAccountAdvertiserForListing,canManageListing,canPublishListing } from "../src/modules/advertisers/authorization";
 import { updateProfile } from "../src/modules/accounts/repository";
+import {createDraft,deleteDraft,readDraft,listDrafts,updateDraft,draftEligibility} from "../src/modules/listing-drafts/repository";
+import {emptyDraft} from "../src/modules/listing-drafts/validation";
 beforeAll(() => {
   if (!process.env.TEST_DATABASE_URL) throw new Error("Set TEST_DATABASE_URL to a migrated, seeded test database.");
   if (process.env.TEST_DATABASE_URL===process.env.DATABASE_URL) throw new Error("Test database must be separate from application database.");
@@ -169,6 +171,101 @@ describe("advertiser profiles and authorization",()=>{
     expect(await db()`SELECT * FROM advertiser_status_events WHERE advertiser_id=${advertiserId}`).toHaveLength(0);
     expect(await db()`SELECT * FROM advertisers WHERE is_demo`).toHaveLength(24);
     expect(await saveAdvertiserProfile(userId,input)).toBe("not-found");
+  });
+});
+describe("private draft persistence and adversarial boundaries",()=>{
+  const owner="draft-integration-owner",other="draft-integration-other",noProfile="draft-integration-no-profile";
+  const requestId=crypto.randomUUID();let draftId:string;let advertiserId:number;
+  beforeAll(async()=>{
+    for(const user of [owner,other,noProfile])await db()`INSERT INTO auth_user(id,name,email,"emailVerified") VALUES (${user},'Draft tester',${user+"@example.test"},true)`;
+    for(const user of [owner,other])expect(await saveAdvertiserProfile(user,{displayName:"Private advertiser",type:"owner",primaryCity:"Bengaluru",description:""})).toBe("saved");
+    advertiserId=(await advertiserProfile(owner))!.advertiserId;
+  });
+  afterAll(async()=>{await db()`DELETE FROM auth_user WHERE id IN (${owner},${other},${noProfile})`;});
+  it("requires an active own profile and creates one draft for concurrent retries",async()=>{
+    expect(await draftEligibility(noProfile)).toBe(false);
+    await expect(createDraft(noProfile,{requestId,content:emptyDraft("rent")})).rejects.toMatchObject({code:"ineligible"});
+    const drafts=await Promise.all(Array.from({length:6},()=>createDraft(owner,{requestId,content:emptyDraft("rent")})));
+    expect(new Set(drafts.map(draft=>draft.id)).size).toBe(1);draftId=drafts[0].id;
+    expect(drafts[0].version).toBe(1);expect(await listDrafts(owner)).toHaveLength(1);
+    expect(await listDrafts(other)).toEqual([]);expect(await readDraft(other,draftId)).toBeNull();
+    await expect(createDraft(owner,{requestId,content:emptyDraft("buy")})).rejects.toMatchObject({code:"conflict"});
+  });
+  it("rejects cross-account writes, stale edits and category reassignment",async()=>{
+    await expect(updateDraft(other,draftId,{version:1,content:emptyDraft("rent")})).rejects.toMatchObject({code:"not-found"});
+    await expect(deleteDraft(other,draftId,{version:1})).rejects.toMatchObject({code:"not-found"});
+    const content={...emptyDraft("rent"),relationship:"tenant",advertisement:{title:"Secret draft title",monthlyRent:15000,deposit:0}};
+    const results=await Promise.allSettled([updateDraft(owner,draftId,{version:1,content}),updateDraft(owner,draftId,{version:1,content})]);
+    expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+    expect((await readDraft(owner,draftId))?.version).toBe(2);
+    await expect(updateDraft(owner,draftId,{version:2,content:emptyDraft("buy")})).rejects.toMatchObject({code:"conflict"});
+    await expect(deleteDraft(owner,draftId,{version:1})).rejects.toMatchObject({code:"conflict"});
+  });
+  it("enforces direct SQL account pairing, immutable relationships, typed category content and server timestamps",async()=>{
+    await expect(db()`UPDATE listing_drafts SET user_id=${other} WHERE id=${draftId}`).rejects.toThrow();
+    await expect(db()`UPDATE listing_drafts SET advertiser_id=1 WHERE id=${draftId}`).rejects.toThrow();
+    await expect(db()`UPDATE listing_drafts SET category='buy' WHERE id=${draftId}`).rejects.toThrow();
+    await expect(db()`INSERT INTO listing_drafts(user_id,advertiser_id,category,content) VALUES (${other},${advertiserId},'rent',${db().json(emptyDraft("rent"))})`).rejects.toThrow();
+    for(const content of [
+      {...emptyDraft("rent"),advertisement:{askingPrice:2}},
+      {...emptyDraft("rent"),advertisement:{monthlyRent:-1}},
+      {...emptyDraft("rent"),advertisement:{deposit:"0"}},
+      {...emptyDraft("rent"),advertisement:{availableFrom:"2026-02-31"}},
+      {...emptyDraft("rent"),property:{amenities:["Lift","Lift"]}},
+      {...emptyDraft("rent"),unit:{bhk:0}},
+    ])await expect(db()`UPDATE listing_drafts SET content=${db().json(content)} WHERE id=${draftId}`).rejects.toThrow();
+    const [before]=await db()`SELECT created_at FROM listing_drafts WHERE id=${draftId}`;
+    const [row]=await db()`UPDATE listing_drafts SET version=500,created_at='1900-01-01',updated_at='1900-01-01' WHERE id=${draftId} RETURNING *`;
+    expect(row.version).toBe(3);expect(row.created_at).toEqual(before.created_at);expect(row.updated_at.getFullYear()).toBeGreaterThan(2020);
+  });
+  it("suspension immediately blocks reads, edits, deletion and preview data",async()=>{
+    await db()`UPDATE advertiser_profiles SET status='suspended' WHERE user_id=${owner}`;
+    try{
+      expect(await readDraft(owner,draftId)).toBeNull();await expect(listDrafts(owner)).rejects.toMatchObject({code:"ineligible"});
+      await expect(updateDraft(owner,draftId,{version:3,content:emptyDraft("rent")})).rejects.toMatchObject({code:"ineligible"});
+      await expect(deleteDraft(owner,draftId,{version:3})).rejects.toMatchObject({code:"ineligible"});
+      await expect(createDraft(owner,{requestId:crypto.randomUUID(),content:emptyDraft("rent")})).rejects.toMatchObject({code:"ineligible"});
+    }finally{await db()`UPDATE advertiser_profiles SET status='active' WHERE user_id=${owner}`;}
+  });
+  it("persists all categories, stays absent from public search/favorites and preserves demo fixtures",async()=>{
+    for(const category of ["flatshares","buy"] as const){
+      const draft=await createDraft(owner,{requestId:crypto.randomUUID(),content:emptyDraft(category)});
+      expect((await readDraft(owner,draft.id))?.content.category).toBe(category);
+    }
+    expect(await listDrafts(owner)).toHaveLength(3);
+    for(const category of ["flatshares","rent","buy"])expect((await searchListings(parseFilters({category}))).total).toBe(8);
+    expect(await savedCollection(owner)).toEqual({total:0,items:[]});
+    expect((await db()`SELECT count(*)::int AS n FROM listings WHERE is_demo`)[0].n).toBe(24);
+    expect((await db()`SELECT count(*)::int AS n FROM advertisers WHERE is_demo`)[0].n).toBe(24);
+  });
+  it("never resurrects a deleted creation request and scopes keys per account",async()=>{
+    await deleteDraft(owner,draftId,{version:3});expect(await readDraft(owner,draftId)).toBeNull();
+    await expect(createDraft(owner,{requestId,content:emptyDraft("rent")})).rejects.toMatchObject({code:"conflict"});
+    const otherDraft=await createDraft(other,{requestId,content:emptyDraft("buy")});expect(otherDraft.id).not.toBe(draftId);
+  });
+  it("bounds live drafts and retained creation receipts per account",async()=>{
+    const otherAdvertiser=(await advertiserProfile(other))!.advertiserId;
+    await db()`INSERT INTO listing_drafts(user_id,advertiser_id,category,content)
+      SELECT ${other},${otherAdvertiser},'rent',${db().json(emptyDraft("rent"))} FROM generate_series(1,99)`;
+    await expect(createDraft(other,{requestId:crypto.randomUUID(),content:emptyDraft("rent")})).rejects.toMatchObject({code:"full"});
+    await db()`DELETE FROM listing_drafts WHERE user_id=${other}`;
+    await db()`INSERT INTO listing_draft_requests(user_id,request_id,payload_hash)
+      SELECT ${other},gen_random_uuid(),repeat('a',64) FROM generate_series(1,999)`;
+    await expect(createDraft(other,{requestId:crypto.randomUUID(),content:emptyDraft("rent")})).rejects.toMatchObject({code:"full"});
+  });
+  it("enforces write throttling without rolling the budget back and resets expired buckets",async()=>{
+    await db()`INSERT INTO listing_draft_write_limits(user_id,request_count) VALUES (${owner},30) ON CONFLICT(user_id) DO UPDATE SET request_count=30,window_started_at=now()`;
+    for(let attempt=0;attempt<2;attempt++)await expect(createDraft(owner,{requestId:crypto.randomUUID(),content:emptyDraft("rent")})).rejects.toMatchObject({code:"limited"});
+    expect((await db()`SELECT request_count FROM listing_draft_write_limits WHERE user_id=${owner}`)[0].request_count).toBe(30);
+    await db()`UPDATE listing_draft_write_limits SET window_started_at=now()-interval '2 minutes' WHERE user_id=${owner}`;
+    await createDraft(owner,{requestId:crypto.randomUUID(),content:emptyDraft("rent")});
+    expect((await db()`SELECT request_count FROM listing_draft_write_limits WHERE user_id=${owner}`)[0].request_count).toBe(1);
+  });
+  it("cascades account deletion without touching public demo data",async()=>{
+    await db()`DELETE FROM auth_user WHERE id=${owner}`;
+    expect(await db()`SELECT id FROM listing_drafts WHERE user_id=${owner}`).toHaveLength(0);
+    expect(await db()`SELECT request_id FROM listing_draft_requests WHERE user_id=${owner}`).toHaveLength(0);
+    expect(await db()`SELECT id FROM advertisers WHERE is_demo`).toHaveLength(24);
   });
 });
 const search = (input: object) => searchListings(parseFilters(input));

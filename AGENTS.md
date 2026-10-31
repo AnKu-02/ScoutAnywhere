@@ -1,6 +1,6 @@
 # Engineering guidance
 
-- Keep the modular monolith. Phase 2.1 authorizes Better Auth and SMTP account email; Phase 2.2 authorizes session-owned saved listings; Phase 2.3 authorizes optional private advertiser profiles, not submissions or property permissions. Submissions, AI, geocoding, payments and other integrations need a new scoped requirement.
+- Keep the modular monolith. Phase 2.1 authorizes Better Auth and SMTP account email; Phase 2.2 authorizes session-owned saved listings; Phase 2.3 authorizes optional private advertiser profiles; Phase 2.4 authorizes account-owned private listing drafts, not public submissions or verified property permissions. Submissions, AI, geocoding, payments and other integrations need a new scoped requirement.
 - Preserve the original project vision in README; distinguish vision from implemented features.
 - Validate external filters through `src/modules/search/filters.ts`. All future natural-language adapters must produce that same structured contract.
 - Keep application SQL in module repositories or database scripts. Bind runtime values with Postgres.js tagged templates; `unsafe` is reserved for reviewed local migration files. Better Auth alone uses its maintained pg/Kysely adapter.
@@ -9,6 +9,7 @@
 - Favorites reference listing IDs, never property IDs or cached listing snapshots. Read only published listing information, derive ownership from verified sessions, keep writes idempotent and origin-checked, and preserve database uniqueness, account limits and cascading deletion.
 - Advertiser profiles reuse non-demo advertiser entities with immutable account relationships. Self-declared types and active profile status confer no identity, ownership, tenancy, brokerage, admin, listing-management or publishing privileges. Never attach accounts to demo advertisers, accept status/ownership IDs through profile input, or treat advertiser association as management permission. Status changes are operator-only and database-audited.
 - Model physical properties, rooms/units and advertisements separately. Add forward-only migrations; never rewrite an applied migration.
+- Private listing drafts belong only in `listing_drafts`, never public properties/units/listings. Derive account ownership from verified sessions; recheck and lock active non-demo advertiser eligibility in every mutation. Preserve immutable ownership/category, versions, creation receipts, bounded validation and write limits. Self-declared relationships grant no verification or publishing rights.
 - All demonstration data and illustrations must be explicitly labeled. Never fabricate ratings, verification or real availability. Do not collect personal information with decorative forms.
 - Use semantic HTML, visible labels, keyboard focus states and mobile layouts. Reuse components and semantic CSS tokens. No UI library is needed.
 - Run lint, typecheck, unit tests, integration tests against an isolated seeded database, build, and Playwright journeys. See README for commands. Verify changed files and report checks that could not run.

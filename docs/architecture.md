@@ -1,5 +1,9 @@
 # Architecture
 
+## Phase 2.4 update
+
+Account-owned private drafts are isolated in `listing_drafts`, not marketplace properties/units/listings. Separate category-aware JSON sections retain the physical property, room/home and advertisement distinction. Composite ownership constraints, immutable relationships, server versions/timestamps, transactional advertiser eligibility locks, creation receipts and account budgets protect writes. Verified server sessions, strict Origin/body validation and owner-scoped projections protect private APIs and previews. A shared Zod contract permits incomplete saves and exposes a separate readiness checklist. No publishing or verified property permission is introduced; public listing authorization still denies management. See `listing-drafts.md` for schema, limits, concurrency, UI behavior and test coverage. Earlier phase statements below are historical where superseded.
+
 ## Phase 2.3 update
 
 Private advertiser profiles reuse the existing `advertisers` entity rather than duplicating advertiser identity. An optional unique `owner_user_id` links a non-demo entity to one Better Auth account; a matching private `advertiser_profiles` extension holds city, description, editing status and timestamps. Composite foreign keys, unique constraints and immutable profile relationships prevent conflicting ownership. Registration/preferences do not create advertisers or grant capabilities. Profile updates use verified session identity, origin checks, strict Zod parsing and a database-backed write budget. Operator-controlled status changes have transactional audit events; suspended profiles cannot be edited. Marketplace search and demo advertiser projection remain unchanged.
