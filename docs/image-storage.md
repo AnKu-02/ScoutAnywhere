@@ -1,5 +1,10 @@
 # Private draft photography — Phase 2.5
 
+## Phase 2.6 implemented update
+
+Private human review is now implemented separately from public marketplace records. See `phase-2.6-implementation.md` for the authoritative current lifecycle, readiness, immutable snapshots, retention references, moderator authorization and privacy limitations. Historical statements below that submissions/moderation are unavailable are superseded. Approval never publishes.
+
+
 ## Scope
 
 Only a verified session with its own active non-demo advertiser profile can upload, list, arrange, cover-select, delete or retrieve photographs for its own draft. Flatshares, rent and buy share the same media boundary. These are self-supplied photographs, not verified evidence. No publication, approval, identity/ownership verification, contact collection, messaging or payment workflow is added. Public demo images and property image constraints are unchanged.

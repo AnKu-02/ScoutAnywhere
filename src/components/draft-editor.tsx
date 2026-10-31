@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DraftPhotos } from "./draft-photos";
+import { SubmissionControls } from "./submission-controls";
 import {draftFieldId,sameDraftContent} from "@/modules/listing-drafts/editor-state";
 import { createDraftSchema, draftAmenities, draftCategoryLabels, draftContentSchema, draftReadiness, emptyDraft, relationshipLabels, type DraftContent, type DraftIssue, type ListingDraft } from "@/modules/listing-drafts/validation";
 
@@ -97,7 +98,7 @@ export function DraftEditor({draft}:{draft?:ListingDraft}){
     </div>;
   }
   const sections=fieldsFor(content.category);
-  return <><p className="notice">Private draft only. Your relationship is self-declared, not verified ownership or permission to advertise. Photographs remain private; public submissions are not available.</p>
+  return <><p className="notice">Private draft only. Your relationship is self-declared, not verified ownership or permission to advertise. Photographs remain private; submission for private human review is available when ready.</p>
     <nav className="draft-section-nav" aria-label="Editor sections">{sectionLinks.map(([id,label],index)=><a key={id} href={`#${id}`} aria-current={activeSection===id?"location":undefined} onClick={event=>{event.preventDefault();setActiveSection(id);focusTarget(id);}}>{index+1}. {label}</a>)}<a href="#draft-photos" onClick={()=>setActiveSection("draft-review")}>Jump to Photos ↓</a></nav>
     <form id={formId} className="account-form draft-form" noValidate onSubmit={async event=>{
       event.preventDefault();if(lock.current)return;
@@ -151,8 +152,9 @@ export function DraftEditor({draft}:{draft?:ListingDraft}){
     <section id="draft-review" tabIndex={-1} className="draft-editor-section" aria-labelledby="draft-review-title"><h2 id="draft-review-title">4. Photos and review</h2>
       <p>Review your details above, then save any text changes before previewing. Photo changes are already saved separately.</p><button className="button secondary" type="submit" form={formId} disabled={busy||conflict}>{busy?"Saving listing details…":"Save listing details"}</button>
       {saved?<DraftPhotos draftId={saved.id} category={saved.content.category}/>:<section id="draft-photos" tabIndex={-1}><h3>Private photos</h3><p>Save your draft first to upload private photographs.</p></section>}
-      <section className="panel" aria-labelledby="draft-readiness"><h3 id="draft-readiness">Details to add when you are ready</h3><p>These are suggestions for completeness, not errors. Missing details do not stop you saving. Photos are optional. This checklist is not submission approval.</p>
-      {parsed.success?(readiness.length?<ul>{readiness.map(issue=><li key={issue.field}><a href={`#${draftFieldId(issue.field)}`} onClick={event=>{event.preventDefault();focusTarget(draftFieldId(issue.field));}}>{issue.message}</a></li>)}</ul>:<p>Listing details are complete. Public submissions are not available yet.</p>):<p>Correct invalid values to see the completeness checklist.</p>}
+      {saved&&<SubmissionControls draftId={saved.id} version={saved.version} dirty={dirty}/>}
+      <section className="panel" aria-labelledby="draft-readiness"><h3 id="draft-readiness">Details to add when you are ready</h3><p>These are suggestions for completeness, not errors. Missing details do not stop you saving. Photos are optional for saving drafts; submission requires at least one processed photo. This checklist is not submission approval.</p>
+      {parsed.success?(readiness.length?<ul>{readiness.map(issue=><li key={issue.field}><a href={`#${draftFieldId(issue.field)}`} onClick={event=>{event.preventDefault();focusTarget(draftFieldId(issue.field));}}>{issue.message}</a></li>)}</ul>:<p>Listing details are complete. Check submission readiness in Photos and review.</p>):<p>Correct invalid values to see the completeness checklist.</p>}
       </section>
     </section>
     <nav className="account-links" aria-label="Draft navigation">{saved&&<Link href={`/dashboard/listings/${saved.id}/preview`}>Preview saved draft</Link>}<Link href="/dashboard/listings">Back to My Listings</Link></nav>

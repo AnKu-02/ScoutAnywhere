@@ -11,11 +11,12 @@ An India-focused housing marketplace, starting with Bengaluru and Mumbai. ScoutA
 - **Saved properties:** bookmarks that persist across sessions.
 - **Advertiser profiles:** account-owned profiles with server-enforced permissions.
 - **Private listing drafts:** incomplete saves, category-specific forms, readiness checklists and private previews.
+- **Private human review:** immutable submissions, advertiser feedback/withdrawal, and explicitly authorized moderator decisions. Approval does not publish.
 - **Private photographs:** multiple uploads, progress/retry feedback, cover selection, reordering and deletion.
 
 The interface uses the **Electric Calm** identity, with Space Grotesk and Plus Jakarta Sans fonts.
 
-> Public discovery contains 24 fictional demo listings. Selected galleries use supplied demo photographs; other listings retain concept illustrations. None represents verified real availability. Account-owned drafts and uploaded photographs remain private. Nothing can be published or submitted for review yet.
+> Public discovery contains 24 fictional demo listings. Selected galleries use supplied demo photographs; other listings retain concept illustrations. None represents verified real availability. Account-owned drafts and uploaded photographs remain private. Complete drafts can be submitted for private human review; approval does not publish anything.
 
 ## Run locally
 
@@ -109,6 +110,10 @@ Phase 2.5 validation: **151 unit/API tests**, **52 integration tests**, **31 des
 
 **Stack:** Next.js App Router, React, TypeScript, PostgreSQL/PostGIS, Better Auth, Zod, Sharp, Tailwind CSS, Vitest and Playwright.
 
+## Submission and moderation
+
+See `docs/phase-2.6-implementation.md` for readiness, lifecycle, photograph retention, local moderator grants/revocation, and manual testing. Review queue: `/dashboard/moderation`. Moderator access is operator-controlled, never a profile setting.
+
 ## Documentation
 
 - `docs/architecture.md` — system design and data boundaries
@@ -125,7 +130,7 @@ Phase 2.5 validation: **151 unit/API tests**, **52 integration tests**, **31 des
 
 ## Boundaries and future direction
 
-Publishing, moderation, identity/property verification, messaging, reviews, maps/geocoding, payments, AI and native apps are **not implemented**. PG Management is informational only. Active advertiser status and uploaded photographs do not establish authenticity, ownership or permission to advertise.
+Publishing, identity/property verification, messaging, reviews, maps/geocoding, payments, AI and native apps are **not implemented**. PG Management is informational only. Active advertiser status and uploaded photographs do not establish authenticity, ownership or permission to advertise.
 
 The longer-term vision includes trusted property discovery, advertiser verification, location-based search, messaging, reviews and locality insights. Each needs a separately scoped implementation.
 

@@ -1,5 +1,10 @@
 # Architecture
 
+## Phase 2.6 implemented update
+
+Private human review is now implemented separately from public marketplace records. See `phase-2.6-implementation.md` for the authoritative current lifecycle, readiness, immutable snapshots, retention references, moderator authorization and privacy limitations. Historical statements below that submissions/moderation are unavailable are superseded. Approval never publishes.
+
+
 ## Pre-2.6 UX stabilization
 
 The mounted private editor now has four focusable sections, accurate normalized dirty comparison, persistent text-save feedback and linked validation recovery. Account navigation exposes the current destination and advertiser setup links directly to draft creation. No domain schema, authorization or media lifecycle changes are introduced. See `pre-2.6-ux.md`. Submission/moderation remains a proposal only in `phase-2.6-proposal.md`.

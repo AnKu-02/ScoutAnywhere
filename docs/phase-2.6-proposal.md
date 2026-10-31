@@ -1,6 +1,6 @@
-# Phase 2.6 submission and moderation — proposal only
+# Phase 2.6 submission and moderation — historical proposal
 
-Nothing in this document is implemented. Approval must never publish a listing or establish verified property rights.
+This historical proposal is superseded by `phase-2.6-implementation.md`. The implementation uses one pending state, in-dashboard feedback (no email/outbox), and retention references rather than object copies. Approval must never publish a listing or establish verified property rights.
 
 ## Proposed lifecycle
 

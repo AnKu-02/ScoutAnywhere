@@ -128,6 +128,7 @@ export async function retrievePhoto(userId:string,draftId:string,id:string,stora
 export async function cleanupMedia(storage:PrivateStorage=privateStorage(),limit=20){
   const rows=await db()`SELECT id FROM draft_photographs WHERE
     (draft_id IS NULL OR owner_id IS NULL OR state='deleting' OR (state='pending' AND expires_at<now())) AND state<>'deleted'
+    AND NOT EXISTS (SELECT 1 FROM listing_submissions s WHERE (s.state='pending' OR s.retain_until>now()) AND s.photos @> jsonb_build_array(jsonb_build_object('key',draft_photographs.storage_key)))
     ORDER BY expires_at,id LIMIT ${Math.min(100,Math.max(1,limit))}`;
   let removed=0;
   for(const candidate of rows){
@@ -137,6 +138,8 @@ export async function cleanupMedia(storage:PrivateStorage=privateStorage(),limit
       if(snapshot?.owner_id)await sql`SELECT id FROM auth_user WHERE id=${snapshot.owner_id} FOR UPDATE`;
       const [row]=await sql`SELECT * FROM draft_photographs WHERE id=${candidate.id} FOR UPDATE`;
       if(!row||row.state==='deleted'||(row.draft_id&&row.owner_id&&row.state==='ready')||(row.state==='pending'&&row.draft_id&&row.owner_id&&new Date(row.expires_at).getTime()>Date.now()))return;
+      const retained=await sql`SELECT 1 FROM listing_submissions s WHERE (s.state='pending' OR s.retain_until>now()) AND s.photos @> jsonb_build_array(jsonb_build_object('key',${row.storage_key}::text)) LIMIT 1`;
+      if(retained.length)return;
       await storage.remove(row.storage_key);
       await sql`UPDATE draft_photographs SET state='deleted',is_cover=false,updated_at=now() WHERE id=${row.id}`;removed++;
     });}catch{/* Keep the durable record for a later bounded retry. */}

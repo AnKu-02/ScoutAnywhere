@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "../src/lib/db";
 import { parseFilters } from "../src/modules/search/filters";
 import { getListing, searchListings } from "../src/modules/listings/repository";
@@ -16,10 +16,120 @@ import os from "node:os";
 import path from "node:path";
 import { LocalPrivateStorage,type PrivateStorage } from "../src/modules/draft-media/storage";
 import { uploadPhoto,listMedia,retrievePhoto,removePhoto,arrangeMedia,cleanupMedia } from "../src/modules/draft-media/repository";
+import { submitDraft, readSubmission, decideSubmission, submittedPhoto, reviewQueue, ownSubmissions } from "../src/modules/submissions/repository";
 beforeAll(() => {
   if (!process.env.TEST_DATABASE_URL) throw new Error("Set TEST_DATABASE_URL to a migrated, seeded test database.");
   if (process.env.TEST_DATABASE_URL===process.env.DATABASE_URL) throw new Error("Test database must be separate from application database.");
   process.env.DATABASE_URL=process.env.TEST_DATABASE_URL;
+});
+
+describe("private submission snapshots, human decisions and retention",()=>{
+  const userId=`submission-owner-${crypto.randomUUID()}`,modId=`submission-mod-${crypto.randomUUID()}`,otherId=`submission-other-${crypto.randomUUID()}`;
+  let root:string,storage:LocalPrivateStorage,bytes:Buffer;
+  const content={category:"rent" as const,relationship:"owner" as const,property:{city:"Bengaluru",locality:"Indiranagar",propertyType:"apartment" as const},unit:{bhk:2},advertisement:{title:"Submission integration home",description:"A spacious bright test apartment with ventilation and convenient access to shops and transport.",monthlyRent:30000,deposit:0,maintenance:0,brokerage:0}};
+  const prepare=async()=>{
+    const draft=await createDraft(userId,{requestId:crypto.randomUUID(),content});
+    const media=await uploadPhoto(userId,draft.id,crypto.randomUUID(),bytes,storage);
+    return {draft,media,input:{requestId:crypto.randomUUID(),draftId:draft.id,version:draft.version,mediaVersion:media.version}};
+  };
+  beforeAll(async()=>{
+    root=await mkdtemp(path.join(os.tmpdir(),"scout-submissions-"));storage=new LocalPrivateStorage(root);bytes=await sharp({create:{width:60,height:40,channels:3,background:"#6747ff"}}).png().toBuffer();
+    for(const id of [userId,modId,otherId])await db()`INSERT INTO auth_user(id,name,email,"emailVerified") VALUES (${id},'Submission test',${id+'@example.test'},true)`;
+    await saveAdvertiserProfile(userId,{displayName:"Submission advertiser",type:"owner",primaryCity:"Bengaluru",description:""});
+    await saveAdvertiserProfile(otherId,{displayName:"Other advertiser",type:"owner",primaryCity:"Mumbai",description:""});
+    await db()`INSERT INTO account_capabilities(user_id,capability) VALUES (${modId},'moderator'),(${userId},'moderator')`;
+  });
+  afterAll(async()=>{
+    const pending=await db()`SELECT id,version FROM listing_submissions WHERE user_id=${userId} AND state='pending'`;
+    for(const row of pending)await decideSubmission(userId,row.id,{version:row.version,decision:"withdrawn",reason:"Test fixture withdrawal"});
+    await db()`DELETE FROM auth_user WHERE id IN (${userId},${modId},${otherId})`;
+    await cleanupMedia(storage,100);await rm(root,{recursive:true,force:true});
+  });
+  it("rejects incomplete content, no-photo and stale text/media capture atomically",async()=>{
+    const incomplete=await createDraft(userId,{requestId:crypto.randomUUID(),content:emptyDraft("rent")});
+    await expect(submitDraft(userId,{requestId:crypto.randomUUID(),draftId:incomplete.id,version:1,mediaVersion:1})).rejects.toMatchObject({status:422});
+    const {input}=await prepare();
+    await expect(submitDraft(userId,{...input,version:2})).rejects.toMatchObject({status:409});
+    await expect(submitDraft(userId,{...input,mediaVersion:1})).rejects.toMatchObject({status:409});
+    expect(await ownSubmissions(userId)).toHaveLength(0);
+  });
+  it("concurrent retries are idempotent; another key cannot create a second pending review",async()=>{
+    const {input}=await prepare();const submissions=await Promise.all(Array.from({length:4},()=>submitDraft(userId,input)));
+    expect(new Set(submissions.map(s=>s.id)).size).toBe(1);
+    await expect(submitDraft(userId,{...input,requestId:crypto.randomUUID()})).rejects.toMatchObject({status:409});
+    await expect(submitDraft(userId,{...input,version:2})).rejects.toMatchObject({status:409});
+    expect((await readSubmission(userId,submissions[0].id)).events).toHaveLength(1);
+  });
+  it("draft edits and photo deletion leave the exact submitted snapshot and bytes intact",async()=>{
+    const {draft,media,input}=await prepare(),submission=await submitDraft(userId,input);
+    const before=await submittedPhoto(modId,submission.id,media.images[0].id,true,storage);
+    await updateDraft(userId,draft.id,{version:1,content:{...content,advertisement:{...content.advertisement,title:"Changed working draft"}}});
+    await removePhoto(userId,draft.id,media.images[0].id,media.version);await cleanupMedia(storage,100);
+    expect((await readSubmission(modId,submission.id,true)).submission).toEqual(submission);
+    expect(await submittedPhoto(userId,submission.id,media.images[0].id,false,storage)).toEqual(before);
+    await expect(retrievePhoto(userId,draft.id,media.images[0].id,storage)).rejects.toThrow();
+    await decideSubmission(userId,submission.id,{version:1,decision:"withdrawn",reason:"Changed working draft"});await cleanupMedia(storage,100);
+    expect(await submittedPhoto(modId,submission.id,media.images[0].id,true,storage)).toEqual(before);
+  });
+  it("denies cross-account reads, ordinary moderators, and self-review; revocation is immediate",async()=>{
+    const {input,media}=await prepare(),submission=await submitDraft(userId,input);
+    await expect(readSubmission(otherId,submission.id)).rejects.toMatchObject({status:404});
+    await expect(reviewQueue(otherId)).rejects.toMatchObject({status:403});
+    await expect(readSubmission(userId,submission.id,true)).rejects.toMatchObject({status:404});
+    await expect(decideSubmission(userId,submission.id,{version:1,decision:"approved",reason:"Self review attempt"})).rejects.toMatchObject({status:404});
+    await expect(submittedPhoto(otherId,submission.id,media.images[0].id,false,storage)).rejects.toMatchObject({status:404});
+    await db()`DELETE FROM account_capabilities WHERE user_id=${modId} AND capability='moderator'`;
+    await expect(readSubmission(modId,submission.id,true)).rejects.toMatchObject({status:403});
+    await expect(decideSubmission(modId,submission.id,{version:1,decision:"approved",reason:"Revoked attempt"})).rejects.toMatchObject({status:403});
+    await db()`INSERT INTO account_capabilities(user_id,capability) VALUES (${modId},'moderator')`;
+    expect((await reviewQueue(modId)).some(s=>s.id===submission.id)).toBe(true);
+    expect((await reviewQueue(userId)).some(s=>s.id===submission.id)).toBe(false);
+  });
+  it("competing final decisions have one winner and immutable attributed audit history",async()=>{
+    const {input}=await prepare(),submission=await submitDraft(userId,input);
+    const decisions=await Promise.allSettled(["approved","rejected"].map(decision=>decideSubmission(modId,submission.id,{version:1,decision,reason:"Reviewed complete submitted information"})));
+    expect(decisions.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+    const detail=await readSubmission(modId,submission.id,true);expect(detail.events).toHaveLength(2);expect(detail.events[1].actorId).toBe(modId);expect(detail.submission.retainUntil).not.toBeNull();
+    await expect(db()`UPDATE listing_submissions SET content=${db().json(content)} WHERE id=${submission.id}`).rejects.toThrow();
+    await expect(db()`UPDATE submission_events SET reason='Overwritten' WHERE submission_id=${submission.id}`).rejects.toThrow();
+    await expect(db()`DELETE FROM submission_events WHERE submission_id=${submission.id}`).rejects.toThrow();
+    await expect(submitDraft(userId,{...input,requestId:crypto.randomUUID()})).rejects.toMatchObject({status:409});
+  });
+  it("links a new revision after changes requested and preserves previous feedback",async()=>{
+    const {input}=await prepare(),first=await submitDraft(userId,input);
+    const decision={version:1,decision:"changes_requested",reason:"Please clarify the description of shared facilities"};
+    const changed=await decideSubmission(modId,first.id,decision);expect(await decideSubmission(modId,first.id,decision)).toEqual(changed);
+    const second=await submitDraft(userId,{...input,requestId:crypto.randomUUID()});expect(second.previousId).toBe(first.id);
+    expect((await readSubmission(userId,first.id)).events.at(-1)?.reason).toBe(decision.reason);
+    await decideSubmission(modId,second.id,{version:1,decision:"approved",reason:"Requested clarification reviewed"});
+    expect((await readSubmission(userId,second.id)).submission.state).toBe("approved");
+    expect((await db()`SELECT count(*)::int AS n FROM listings WHERE title=${content.advertisement.title}`)[0].n).toBe(0);
+  });
+  it("serializes atomic capture with concurrent text and media edits",async()=>{
+    const {input,draft,media}=await prepare();
+    const result=await Promise.allSettled([submitDraft(userId,input),updateDraft(userId,draft.id,{version:1,content:{...content,advertisement:{...content.advertisement,title:"Concurrent title"}}}),removePhoto(userId,draft.id,media.images[0].id,media.version)]);
+    if(result[0].status==="fulfilled"){
+      const s=result[0].value;expect(s.content).toEqual(content);expect(s.photos[0].id).toBe(media.images[0].id);expect(s.textVersion).toBe(1);expect(s.mediaVersion).toBe(media.version);expect((await submittedPhoto(modId,s.id,media.images[0].id,true,storage)).length).toBeGreaterThan(0);
+    }else expect(result[0].reason).toMatchObject({status:409});
+  });
+  it("retains a shared object across obligations, fails cleanup safely, and denies expired photo delivery",async()=>{
+    const {input,draft,media}=await prepare(),first=await submitDraft(userId,input);
+    await decideSubmission(modId,first.id,{version:1,decision:"changes_requested",reason:"Please clarify shared facilities"});
+    const second=await submitDraft(userId,{...input,requestId:crypto.randomUUID()});
+    await removePhoto(userId,draft.id,media.images[0].id,media.version);
+    let removals=0;const failing:PrivateStorage={put:(key,bytes)=>storage.put(key,bytes),get:key=>storage.get(key),remove:async()=>{removals++;throw new Error("Storage unavailable");}};
+    await cleanupMedia(failing,100);expect(removals).toBe(0);
+    expect((await submittedPhoto(modId,second.id,media.images[0].id,true,storage)).length).toBeGreaterThan(0);
+    const firstRecord=(await readSubmission(userId,first.id)).submission;
+    const clock=vi.spyOn(Date,"now").mockReturnValue(new Date(firstRecord.retainUntil!).getTime()+1000);
+    try{await expect(submittedPhoto(userId,first.id,media.images[0].id,false,storage)).rejects.toMatchObject({status:410});expect((await submittedPhoto(modId,second.id,media.images[0].id,true,storage)).length).toBeGreaterThan(0);}finally{clock.mockRestore();}
+  });
+  it("protects account deletion while pending and preserves all 24 demo listings/advertisers",async()=>{
+    const {input}=await prepare();await submitDraft(userId,input);
+    await expect(db()`DELETE FROM auth_user WHERE id=${userId}`).rejects.toThrow();
+    expect((await db()`SELECT count(*)::int AS n FROM listings WHERE is_demo`)[0].n).toBe(24);
+    expect((await db()`SELECT count(*)::int AS n FROM advertisers WHERE is_demo`)[0].n).toBe(24);
+  });
 });
 
 describe("repeatable public demo photograph references",()=>{
