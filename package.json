@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "db:seed": "tsx --env-file=.env scripts/seed.ts",
+    "db:demo-images": "tsx --env-file=.env scripts/update-demo-images.ts",
     "media:cleanup": "tsx --env-file=.env scripts/cleanup-draft-media.ts"
   },
   "keywords": [],

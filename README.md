@@ -15,7 +15,7 @@ An India-focused housing marketplace, starting with Bengaluru and Mumbai. ScoutA
 
 The interface uses the **Electric Calm** identity, with Space Grotesk and Plus Jakarta Sans fonts.
 
-> Public discovery contains 24 fictional demo listings. Their illustrations are not property photographs or real availability. Account-owned drafts and uploaded photographs remain private. Nothing can be published or submitted for review yet.
+> Public discovery contains 24 fictional demo listings. Selected galleries use supplied demo photographs; other listings retain concept illustrations. None represents verified real availability. Account-owned drafts and uploaded photographs remain private. Nothing can be published or submitted for review yet.
 
 ## Run locally
 
@@ -119,6 +119,7 @@ Phase 2.5 validation: **151 unit/API tests**, **52 integration tests**, **31 des
 - `docs/image-storage.md` — private media setup, security and manual testing
 - `docs/phase-2.5-validation.md` — executed checks and remaining acceptance
 - `docs/visual-identity.md` — Electric Calm design system
+- `docs/demo-images.md` — supplied demo galleries and repeatable image-reference updates
 - `docs/PRD.md` — product direction
 - `AGENTS.md` — engineering guidance
 

@@ -1,4 +1,5 @@
 import { db } from "../src/lib/db";
+import { updateDemoImages } from "./demo-images";
 const sql = db();
 if (process.env.NODE_ENV === "production" || process.env.ALLOW_DEMO_SEED !== "true") {
   throw new Error("Demo seed requires ALLOW_DEMO_SEED=true and a non-production environment.");
@@ -6,7 +7,7 @@ if (process.env.NODE_ENV === "production" || process.env.ALLOW_DEMO_SEED !== "tr
 try {
   await sql.begin(async tx => {
     await tx`SELECT pg_advisory_xact_lock(8142701)`;
-    // Never truncate or overwrite existing data. Repeat runs are a no-op.
+    // Never truncate or recreate existing listings. Demo images reconcile below.
     if ((await tx`SELECT id FROM listings LIMIT 1`).length) { console.log("Listings exist; seed skipped."); return; }
     const locations = [
       ["Bengaluru","Karnataka","HSR Layout","560102"], ["Bengaluru","Karnataka","Whitefield","560066"],
@@ -35,4 +36,5 @@ try {
     }
     console.log("Seeded 24 fictional demo listings.");
   });
+  await updateDemoImages(sql);
 } finally { await sql.end(); }

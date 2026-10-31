@@ -8,6 +8,8 @@ import { canEditAdvertiserProfile,isAccountAdvertiserForListing,canManageListing
 import { updateProfile } from "../src/modules/accounts/repository";
 import {createDraft,deleteDraft,readDraft,listDrafts,updateDraft,draftEligibility} from "../src/modules/listing-drafts/repository";
 import {emptyDraft} from "../src/modules/listing-drafts/validation";
+import {updateDemoImages} from "../scripts/demo-images";
+import {demoImageGroups} from "../src/modules/listings/demo-images";
 import sharp from "sharp";
 import { mkdtemp,rm,access } from "node:fs/promises";
 import os from "node:os";
@@ -18,6 +20,21 @@ beforeAll(() => {
   if (!process.env.TEST_DATABASE_URL) throw new Error("Set TEST_DATABASE_URL to a migrated, seeded test database.");
   if (process.env.TEST_DATABASE_URL===process.env.DATABASE_URL) throw new Error("Test database must be separate from application database.");
   process.env.DATABASE_URL=process.env.TEST_DATABASE_URL;
+});
+
+describe("repeatable public demo photograph references",()=>{
+  it("keeps all non-image records and unrelated images unchanged, with consistent saved projection",async()=>{
+    const snapshot=async()=>({listings:await db()`SELECT * FROM listings ORDER BY id`,advertisers:await db()`SELECT * FROM advertisers ORDER BY id`,properties:await db()`SELECT * FROM properties ORDER BY id`,units:await db()`SELECT * FROM units ORDER BY id`,images:await db()`SELECT * FROM property_images ORDER BY id`});
+    const before=await snapshot();expect(await updateDemoImages(db())).toEqual([]);expect(await snapshot()).toEqual(before);
+    for(const group of demoImageGroups){
+      const result=await searchListings(parseFilters({category:group.category,city:group.city,locality:group.locality}));
+      expect(result.items).toHaveLength(1);const listing=result.items[0];
+      expect(listing.images.map(image=>image.path)).toEqual(group.images.map(([file])=>`/images/demo/${file}`));
+      expect((await getListing(listing.id))!.images).toEqual(listing.images);
+      const {getPublishedListingsByIds}=await import("../src/modules/listings/repository");
+      expect((await getPublishedListingsByIds([listing.id]))[0].images).toEqual(listing.images);
+    }
+  });
 });
 
 describe("saved listings persistence and boundaries",()=>{

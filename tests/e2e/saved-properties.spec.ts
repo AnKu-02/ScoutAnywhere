@@ -51,7 +51,17 @@ test("saved properties: authentication intent, all categories, persistence and t
     const ids=(await(await page.request.get("/api/saved-listings")).json()).ids as number[];expect(ids).toHaveLength(3);
     await page.goto("/dashboard/saved");await expect(page.locator(".property-card")).toHaveCount(3);
     for(const width of [375,768,1440]){await page.setViewportSize({width,height:1000});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(page.locator(".property-card").first().getByRole("button")).toBeVisible();}
-    await page.locator(`article:has(h3 a[href='${href}']) h3 a`).click();await expect(page).toHaveURL(origin+href);
+    // Assigned demo covers must remain consistent in Saved Properties.
+    const photoListings=await sql`SELECT DISTINCT l.id FROM listings l JOIN units u ON u.id=l.unit_id JOIN property_images im ON im.property_id=u.property_id WHERE l.is_demo AND im.path LIKE '/images/demo/%' ORDER BY l.id`;
+    for(const listing of photoListings)expect((await page.request.put("/api/saved-listings",{headers:{origin},data:{listingId:listing.id}})).ok()).toBe(true);
+    await page.reload();
+    for(const listing of photoListings){
+      const [cover]=await sql`SELECT im.path FROM property_images im JOIN units u ON u.property_id=im.property_id JOIN listings l ON l.unit_id=u.id WHERE l.id=${listing.id} ORDER BY im.sort_order,im.id LIMIT 1`;
+      const image=page.locator(`article:visible:has(h3 a[href='/listings/${listing.id}']) .card-image img`);
+      await expect(image).toBeVisible();expect(new URL(await image.getAttribute("src")||"",origin).searchParams.get("url")).toBe(cover.path);
+    }
+    for(const listing of photoListings)if(!ids.includes(listing.id))expect((await page.request.delete("/api/saved-listings",{headers:{origin},data:{listingId:listing.id}})).ok()).toBe(true);
+    await page.locator(`article:visible:has(h3 a[href='${href}']) h3 a`).click();await expect(page).toHaveURL(origin+href);
     expect((await page.request.put("/api/saved-listings",{headers:{origin:"https://evil.example"},data:{listingId:ids[0]}})).status()).toBe(403);
     expect((await page.request.put("/api/saved-listings",{headers:{origin},data:{listingId:-1}})).status()).toBe(400);
     const [user]=await sql`SELECT id FROM auth_user WHERE email=${email}`;

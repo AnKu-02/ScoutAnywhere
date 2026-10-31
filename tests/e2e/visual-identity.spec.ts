@@ -28,7 +28,7 @@ for (const width of [375,768,1440]) {
       }
       if (["/rent","/buy","/flatshares"].includes(route)) {
         const sources=await page.locator(".property-card img:visible").evaluateAll(images=>images.map(img=>decodeURIComponent(img.getAttribute("src")??"")));
-        for(const source of sources) expect(source).toMatch(route==="/flatshares" ? /room\.svg|lavender-bedroom-workspace\.png/ : /living\.svg|building\.svg/);
+        for(const source of sources) expect(source).toMatch(route==="/flatshares" ? /room\.svg|lavender-bedroom-workspace\.png|\/images\/demo\// : /living\.svg|building\.svg|\/images\/demo\//);
       }
       if (route==="/rent") {
         const summary=page.getByRole("complementary",{name:"Property filters",exact:true}).locator(".filter-disclosure summary");

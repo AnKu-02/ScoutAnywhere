@@ -8,8 +8,9 @@ import { SaveListingButton } from "./saved-properties";
 export function PropertyCard({ listing: l, variant = "full" }: { listing: Listing; variant?: "full"|"compact" }) {
   const image=listingIllustrations(l)[0];
   return <article className={`property-card property-card-${variant}`}>
-    <div className="card-image"><Image src={image?.path ?? "/images/building.svg"} alt={image?.alt ?? "Property illustration"} width={image?.width ?? 800} height={image?.height ?? 520} sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1100px) 45vw, 400px"/><span className="image-badge">Fictional demo · Illustration</span></div>
+    <div className="card-image"><Image src={image?.path ?? "/images/building.svg"} alt={image?.alt ?? "Property illustration"} width={image?.width ?? 800} height={image?.height ?? 520} sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1100px) 45vw, 400px"/>{!image?.path.startsWith("/images/demo/")&&<span className="image-badge">Fictional demo · Illustration</span>}</div>
     <div className="card-body">
+      {image?.path.startsWith("/images/demo/")&&<p className="demo-photo-label">Fictional demo · Not real availability</p>}
       <h3><Link href={`/listings/${l.id}`}>{l.title}</Link></h3>
       <p className="location"><MapPin size={16} aria-hidden="true"/>{l.locality}, {l.city}</p>
       <p className="saved-listing-category">{l.category === "flatshares" ? "Flatshare · Private bedroom" : l.category === "rent" ? `${l.bhk} BHK · For rent` : `${l.bhk} BHK · For sale`}</p>
@@ -21,7 +22,8 @@ export function PropertyCard({ listing: l, variant = "full" }: { listing: Listin
     </div></article>;
 }
 export function ImageGallery({ listing }: { listing: Listing }) {
-  return <section aria-label="Property illustrations"><div className="gallery">{listingIllustrations(listing).map((im,i) => <figure key={`${im.path}-${i}`}><Image src={im.path} alt={im.alt} width={im.width} height={im.height} sizes={i===0?"(max-width: 700px) 100vw, 65vw":"(max-width: 700px) 50vw, 35vw"} priority={i===0}/><figcaption>{im.caption}</figcaption></figure>)}</div><p className="muted caption">Concept illustrations only—not property photographs. All listing details are fictional.</p></section>;
+  const images=listingIllustrations(listing);const photographs=images.some(image=>image.path.startsWith("/images/demo/"));
+  return <section aria-label={photographs?"Demo property photographs":"Property illustrations"}><div className={photographs?"gallery demo-photo-gallery":"gallery"}>{images.map((im,i) => <figure key={`${im.path}-${i}`}><Image src={im.path} alt={im.alt} width={im.width} height={im.height} sizes={i===0?"(max-width: 700px) 100vw, 65vw":"(max-width: 700px) 50vw, 35vw"} priority={i===0}/><figcaption>{im.caption}</figcaption></figure>)}</div><p className="muted caption">{photographs?"Fictional demonstration imagery, not photographs of a verified available property. All listing details are fictional.":"Concept illustrations only—not property photographs. All listing details are fictional."}</p></section>;
 }
 export function PriceBreakdown({ listing: l }: { listing: Listing }) {
   return <section className="panel"><h2>Clear costs. No guesswork.</h2><dl className="data-list"><div><dt>{l.category === "buy" ? "Asking price" : "Monthly rent"}</dt><dd>{inr(l.price)}</dd></div>{l.category !== "buy" && <div><dt>Refundable security deposit</dt><dd>{inr(l.deposit ?? 0)}</dd></div>}<div><dt>Maintenance / month</dt><dd>{inr(l.maintenance)}</dd></div><div><dt>One-time brokerage</dt><dd>{inr(l.brokerage)}</dd></div></dl><p className="muted">Utilities are extra, billed at actuals. {l.category === "buy" && "Taxes, stamp duty and registration are not included."} Illustrative costs only.</p></section>;
