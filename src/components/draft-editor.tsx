@@ -89,6 +89,7 @@ export function DraftEditor({draft}:{draft?:ListingDraft}){
   }
   const sections=fieldsFor(content.category);
   return <><p className="notice">Private draft only. Your relationship is self-declared, not verified ownership or permission to advertise. Photographs remain private; public submissions are not available.</p>
+    <nav className="draft-section-nav" aria-label="Editor sections"><a href="#draft-photos">Jump to Photos ↓</a><span>Photos save automatically after upload</span></nav>
     <form className="account-form draft-form" noValidate onSubmit={async event=>{
       event.preventDefault();if(lock.current)return;
       setIssues([]);setMessage("");setFailed(false);
@@ -126,9 +127,9 @@ export function DraftEditor({draft}:{draft?:ListingDraft}){
         <button type="submit" className="button">{busy?"Saving…":"Save draft"}</button>
       </fieldset>
       {message&&<p role={failed?"alert":"status"} className={failed?"notice":"account-feedback"}>{message}</p>}
-      <p className="muted" role="status">{dirty?"Unsaved changes":"No unsaved changes"}{saved?` · Saved version ${saved.version}`:""}</p>
+      <p className="muted" role="status">{dirty?"Unsaved changes":"No unsaved changes"}</p>
     </form>
-    {saved?<DraftPhotos draftId={saved.id} category={saved.content.category}/>:<section><h2>5. Photos</h2><p>Save your draft first to upload private photographs.</p></section>}
+    {saved?<DraftPhotos draftId={saved.id} category={saved.content.category}/>:<section id="draft-photos" tabIndex={-1}><h2>5. Photos</h2><p>Save your draft first to upload private photographs.</p></section>}
     <section className="panel" aria-labelledby="draft-readiness"><h2 id="draft-readiness">Next-step checklist</h2><p>Missing details do not stop you saving. Photographs are optional at this stage.</p>
       {parsed.success?(readiness.length?<ul>{readiness.map(issue=><li key={issue.field}>{issue.message}</li>)}</ul>:<p>Your listing draft is ready for the next step. Public submissions are not available yet.</p>):<p>Correct invalid values to see the checklist.</p>}
     </section>
