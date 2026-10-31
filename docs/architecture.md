@@ -1,5 +1,9 @@
 # Architecture
 
+## Pre-2.6 UX stabilization
+
+The mounted private editor now has four focusable sections, accurate normalized dirty comparison, persistent text-save feedback and linked validation recovery. Account navigation exposes the current destination and advertiser setup links directly to draft creation. No domain schema, authorization or media lifecycle changes are introduced. See `pre-2.6-ux.md`. Submission/moderation remains a proposal only in `phase-2.6-proposal.md`.
+
 ## Phase 2.5 update
 
 Private draft photographs use a provider-neutral object interface: owner-only local storage outside public/ for development, or an explicitly configured private S3-compatible bucket. Server-mediated raw uploads create durable database reservations, undergo bounded child-process Sharp decoding/orientation/re-encoding, and become deliverable only after successful object PUT and metadata finalization. Migrations 008/009 add metadata, independent media versions, partial cover/order uniqueness, immutable ownership and cleanup records; prior migrations and public property images are unchanged. Session-authorized content routes use private/no-store headers and are excluded from Next image optimization. A minute-based bounded reconciler/CLI reclaims failed uploads and deleted draft/account objects. See `image-storage.md` for limits, operational security, provider compatibility and future publication considerations. Earlier “no uploads” statements are historical where superseded.

@@ -65,3 +65,14 @@ svg{display:inline-block;vertical-align:middle;flex-shrink:0}a:focus-visible,but
 .demo-photo-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;gap:16px;align-items:start}.demo-photo-gallery figure,.demo-photo-gallery figure:first-child{grid-column:auto;grid-row:auto;background:var(--background);border-radius:var(--radius);overflow:hidden}.demo-photo-gallery figure:first-child{grid-column:1/-1}.demo-photo-gallery img{display:block;width:100%;height:280px;object-fit:contain}.demo-photo-gallery figure:first-child img{height:440px}.demo-photo-gallery figcaption{position:static;background:transparent;color:var(--muted);padding:10px 12px;font-size:13px}@media(max-width:700px){.demo-photo-gallery{gap:10px}.demo-photo-gallery img{height:180px}.demo-photo-gallery figure:first-child img{height:260px}.demo-photo-gallery figcaption{font-size:12px}}
 
 .demo-photo-label{font-size:11px;color:var(--muted);margin:0 0 8px}
+
+/* Private editor: one mounted form, four addressable sections, no bottom overlay. */
+.account-links a[aria-current="page"]{color:var(--primary);font-weight:700;text-decoration:underline;text-underline-offset:5px}
+.draft-section-nav a{white-space:normal;min-width:0}.draft-section-nav a[aria-current="location"]{outline:2px solid var(--primary);outline-offset:2px}
+.draft-save-bar{position:sticky;top:8px;z-index:4;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-small);padding:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;box-shadow:0 3px 12px #17251f0d}
+.draft-save-bar p{margin:0;font-size:14px}.draft-save-bar>span{flex-basis:100%;font-size:12px}
+.draft-editor-section{scroll-margin-top:180px;margin:32px 0;outline-offset:6px}.draft-editor-section input,.draft-editor-section select,.draft-editor-section textarea{scroll-margin-top:180px}
+.draft-error-summary{margin:20px 0;outline-offset:4px}.draft-error-summary a,.draft-editor-section li a{text-decoration:underline;text-underline-offset:3px}.draft-error-summary li{overflow-wrap:anywhere}
+.draft-form:has(input:focus,select:focus,textarea:focus) .draft-save-bar{position:static}
+@media(max-height:650px){.draft-save-bar{position:static}.draft-editor-section,.draft-editor-section input,.draft-editor-section select,.draft-editor-section textarea{scroll-margin-top:20px}}
+@media(max-width:700px){.draft-section-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.draft-section-nav a{font-size:13px;padding:10px}.draft-save-bar{gap:8px}.draft-save-bar p{flex:1;min-width:120px}.draft-editor-section{margin:24px 0}}

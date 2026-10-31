@@ -60,7 +60,7 @@ export function DraftPhotos({draftId,category}:{draftId:string;category:"flatsha
   }
   function arrange(ids:string[],coverId:string|null){return manage("PUT",{version:collection.version,ids,coverId});}
   const ids=collection.images.map(photo=>photo.id),cover=collection.images.find(photo=>photo.cover)?.id??null;
-  return <section id="draft-photos" tabIndex={-1} className="photo-section" aria-labelledby="photos-heading"><div className="photo-heading"><h2 id="photos-heading">5. Photos</h2><span className="photo-private">Private draft</span></div><p>Photos save automatically. Save listing text separately.</p><p className="muted">Only you can see these photos. Self-supplied, not independently verified.</p>
+  return <section id="draft-photos" tabIndex={-1} className="photo-section" aria-labelledby="photos-heading"><div className="photo-heading"><h3 id="photos-heading">Private photos</h3><span className="photo-private">Private draft</span></div><p>Photos save automatically. Save listing text separately.</p><p className="muted">Only you can see these photos. Self-supplied, not independently verified.</p>
     <div className={`photo-drop${dragging&&!busy?" is-dragging":""}`} onDragEnter={event=>{event.preventDefault();setDragging(true);}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setDragging(false);}} onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect=busy?"none":"copy";}} onDrop={event=>{event.preventDefault();setDragging(false);void accept(Array.from(event.dataTransfer.files));}}>
       <span className="photo-upload-icon"><Upload size={26} aria-hidden="true"/></span>
       <h3>Add a little more of your home</h3><p>Drag photos here, or choose files from your device.</p>

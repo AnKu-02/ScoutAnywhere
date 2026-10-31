@@ -42,6 +42,14 @@ test("advertiser setup, persistence, security boundaries and two-account isolati
     await advertiserForm.getByLabel("Short description (optional)",{exact:true}).fill(input.description);
     await page.getByRole("button",{name:"Create advertiser profile",exact:true}).click();await expect(page.getByRole("status")).toContainText("Advertiser profile saved.");
     await expect(page.getByText("Active profile — editing enabled",{exact:true})).toBeVisible();
+    await expect(page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"Advertiser",exact:true})).toHaveAttribute("aria-current","page");
+    await expect(page.getByRole("link",{name:"Create your first private draft",exact:true})).toHaveAttribute("href","/dashboard/listings/new");
+    await page.getByRole("link",{name:"Create your first private draft",exact:true}).click();
+    await expect(page.getByRole("heading",{name:"Create private draft",exact:true})).toBeVisible();
+    await expect(page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"My Listings",exact:true})).toHaveAttribute("aria-current","page");
+    await page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"Advertiser",exact:true}).click();
+    await expect(page).toHaveURL(origin+"/dashboard/advertiser");
+    await expect(advertiserForm.getByLabel("Advertiser display name",{exact:true})).toBeVisible();
     await page.reload();await expect(advertiserForm.getByLabel("Advertiser display name",{exact:true})).toHaveValue(input.displayName);
     for(const type of ["broker","tenant"]){
       await advertiserForm.getByLabel("Advertiser type",{exact:true}).selectOption(type);

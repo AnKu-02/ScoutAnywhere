@@ -6,5 +6,5 @@ export default async function Page(){
   let eligible=false;
   try{eligible=await draftEligibility(user.id);}catch{return <p role="alert">Draft creation is temporarily unavailable. Reload to try again.</p>;}
   if(!eligible)return <p role="alert">An active advertiser profile is required to create private drafts.</p>;
-  return <><h2>Create Listing</h2><DraftEditor/></>;
+  return <><h2>Create private draft</h2><DraftEditor/></>;
 }

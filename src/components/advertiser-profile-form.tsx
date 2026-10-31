@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef,useState } from "react";
 import { useRouter } from "next/navigation";
 import { accountRequest } from "./auth-forms";
@@ -7,12 +8,13 @@ import { advertiserTypes,advertiserTypeLabels,operatingCities,type AdvertiserPro
 
 export function AdvertiserProfileForm({profile,defaultName}:{profile:AdvertiserProfile|null;defaultName:string}){
   const [busy,setBusy]=useState(false);const [message,setMessage]=useState("");const [failed,setFailed]=useState(false);
-  const lock=useRef(false);const router=useRouter();
+  const lock=useRef(false);const router=useRouter();const [created,setCreated]=useState(false);
   return <form className="account-form" onSubmit={async event=>{
     event.preventDefault();if(lock.current)return;lock.current=true;setBusy(true);setMessage("");setFailed(false);
     const form=new FormData(event.currentTarget);
     try{
       await accountRequest("/api/advertiser-profile",{displayName:form.get("displayName"),type:form.get("type"),primaryCity:form.get("primaryCity"),description:form.get("description")},"PUT");
+      if(!profile)setCreated(true);
       setMessage("Advertiser profile saved.");router.refresh();
     }catch(error){setFailed(true);setMessage(error instanceof Error?error.message:"Could not save. Please try again.");}
     finally{lock.current=false;setBusy(false);}
@@ -27,6 +29,7 @@ export function AdvertiserProfileForm({profile,defaultName}:{profile:AdvertiserP
       <p className="notice">Your type is self-declared. It does not verify your identity, ownership, tenancy or broker credentials, or give permission to manage a property.</p>
       <button type="submit" className="button">{busy?"Saving…":profile?"Save advertiser profile":"Create advertiser profile"}</button>
     </fieldset>
+    {created&&<section className="panel"><h2>Your private draft workspace is ready</h2><p>You can prepare a private draft. Your self-declared profile does not verify property rights or enable public publishing.</p><Link className="button secondary" href="/dashboard/listings/new">Create your first private draft</Link></section>}
     {message&&<p role={failed?"alert":"status"} className={failed?"notice":"account-feedback"}>{message}</p>}
   </form>;
 }

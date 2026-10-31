@@ -1,5 +1,7 @@
 # Private listing drafts — Phase 2.4
 
+**Pre-2.6 UX update:** the current editor groups all mounted fields into Property basics, Room/Home details, Pricing and availability, and Photos and review. Saving is explicit for text and independent for photos. Missing fields appear only as completeness suggestions; invalid supplied values have linked errors. Dirty state compares normalized saved content, and conflict recovery requires explicit review/discard. Technical versions remain API-only. See `pre-2.6-ux.md`; older UI descriptions below are historical where superseded. Submission and publication remain unavailable.
+
 **Phase 2.5 update:** drafts now support optional private photographs, cover selection, accessible reordering and deletion. Photo changes save independently of listing text. Authorized image delivery never uses public URLs or the image optimizer; public publishing and verification remain unavailable. See `image-storage.md` for storage setup, migrations 008/009, limits, processing and cleanup. Statements below about deferred uploads describe the Phase 2.4 milestone only.
 
 ## Scope and access
