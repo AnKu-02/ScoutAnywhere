@@ -8,6 +8,12 @@ import { canEditAdvertiserProfile,isAccountAdvertiserForListing,canManageListing
 import { updateProfile } from "../src/modules/accounts/repository";
 import {createDraft,deleteDraft,readDraft,listDrafts,updateDraft,draftEligibility} from "../src/modules/listing-drafts/repository";
 import {emptyDraft} from "../src/modules/listing-drafts/validation";
+import sharp from "sharp";
+import { mkdtemp,rm,access } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { LocalPrivateStorage,type PrivateStorage } from "../src/modules/draft-media/storage";
+import { uploadPhoto,listMedia,retrievePhoto,removePhoto,arrangeMedia,cleanupMedia } from "../src/modules/draft-media/repository";
 beforeAll(() => {
   if (!process.env.TEST_DATABASE_URL) throw new Error("Set TEST_DATABASE_URL to a migrated, seeded test database.");
   if (process.env.TEST_DATABASE_URL===process.env.DATABASE_URL) throw new Error("Test database must be separate from application database.");
@@ -266,6 +272,130 @@ describe("private draft persistence and adversarial boundaries",()=>{
     expect(await db()`SELECT id FROM listing_drafts WHERE user_id=${owner}`).toHaveLength(0);
     expect(await db()`SELECT request_id FROM listing_draft_requests WHERE user_id=${owner}`).toHaveLength(0);
     expect(await db()`SELECT id FROM advertisers WHERE is_demo`).toHaveLength(24);
+  });
+});
+describe("private photographs: database and actual isolated object storage",()=>{
+  const owner="media-integration-owner",other="media-integration-other";
+  let root:string,storage:LocalPrivateStorage,draftId:string,otherDraftId:string,bytes:Buffer;
+  beforeAll(async()=>{
+    root=await mkdtemp(path.join(os.tmpdir(),"scout-media-integration-"));storage=new LocalPrivateStorage(root);
+    bytes=await sharp({create:{width:60,height:40,channels:3,background:"red"}}).png().toBuffer();
+    for(const id of [owner,other]){
+      await db()`INSERT INTO auth_user(id,name,email,"emailVerified") VALUES (${id},'Photo tester',${id+"@example.test"},true)`;
+      await saveAdvertiserProfile(id,{displayName:"Photo advertiser",type:"owner",primaryCity:"Bengaluru",description:""});
+    }
+    draftId=(await createDraft(owner,{requestId:crypto.randomUUID(),content:emptyDraft("flatshares")})).id;
+    otherDraftId=(await createDraft(other,{requestId:crypto.randomUUID(),content:emptyDraft("buy")})).id;
+  });
+  afterAll(async()=>{
+    await db()`DELETE FROM auth_user WHERE id IN (${owner},${other})`;await cleanupMedia(storage,100);await rm(root,{recursive:true,force:true});
+  });
+  it("uploads once, persists metadata privately and denies other-account reads/writes",async()=>{
+    const key=crypto.randomUUID();const media=await uploadPhoto(owner,draftId,key,bytes,storage);
+    expect(media.images).toHaveLength(1);expect(media.images[0].cover).toBe(true);
+    expect(await uploadPhoto(owner,draftId,key,bytes,storage)).toEqual(media);
+    expect(media.images[0]).not.toHaveProperty("storage_key");
+    const image=media.images[0];expect((await sharp(await retrievePhoto(owner,draftId,image.id,storage)).metadata()).format).toBe("webp");
+    await expect(retrievePhoto(other,draftId,image.id,storage)).rejects.toMatchObject({status:404});
+    await expect(uploadPhoto(other,draftId,crypto.randomUUID(),bytes,storage)).rejects.toMatchObject({status:404});
+    await expect(removePhoto(other,draftId,image.id,media.version)).rejects.toMatchObject({status:404});
+    await expect(uploadPhoto(owner,draftId,crypto.randomUUID(),bytes,storage)).rejects.toMatchObject({status:409});
+    const [row]=await db()`SELECT * FROM draft_photographs WHERE id=${image.id}`;
+    await expect(db()`UPDATE draft_photographs SET owner_id=${other} WHERE id=${image.id}`).rejects.toThrow();
+    await expect(db()`UPDATE draft_photographs SET draft_id=${otherDraftId} WHERE id=${image.id}`).rejects.toThrow();
+    expect(row.content_type).toBe("image/webp");expect(row.byte_size).toBeGreaterThan(0);
+  });
+  it("serializes duplicate concurrent uploads and versioned cover/order changes",async()=>{
+    const blue=await sharp({create:{width:50,height:40,channels:3,background:"blue"}}).jpeg().toBuffer();const key=crypto.randomUUID();
+    const attempts=await Promise.allSettled([uploadPhoto(owner,draftId,key,blue,storage),uploadPhoto(owner,draftId,key,blue,storage)]);
+    expect(attempts.some(result=>result.status==='fulfilled')).toBe(true);
+    const media=await listMedia(owner,draftId);expect(media.images).toHaveLength(2);
+    const ids=media.images.map(image=>image.id).reverse();
+    const reordered=await arrangeMedia(owner,draftId,{version:media.version,ids,coverId:ids[0]});
+    expect(reordered.images.map(image=>image.id)).toEqual(ids);expect(reordered.images[0].cover).toBe(true);
+    await expect(arrangeMedia(owner,draftId,{version:media.version,ids,coverId:ids[1]})).rejects.toMatchObject({status:409});
+    await expect(arrangeMedia(owner,draftId,{version:reordered.version,ids:[ids[0]],coverId:ids[0]})).rejects.toMatchObject({status:400});
+    await expect(db()`UPDATE draft_photographs SET is_cover=true WHERE draft_id=${draftId} AND state='ready'`).rejects.toThrow();
+  });
+  it("suspension blocks delivery and image mutations immediately",async()=>{
+    const media=await listMedia(owner,draftId);
+    await db()`UPDATE advertiser_profiles SET status='suspended' WHERE user_id=${owner}`;
+    try{
+      await expect(retrievePhoto(owner,draftId,media.images[0].id,storage)).rejects.toMatchObject({status:404});
+      await expect(uploadPhoto(owner,draftId,crypto.randomUUID(),bytes,storage)).rejects.toMatchObject({status:404});
+      await expect(removePhoto(owner,draftId,media.images[0].id,media.version)).rejects.toMatchObject({status:404});
+    }finally{await db()`UPDATE advertiser_profiles SET status='active' WHERE user_id=${owner}`;}
+  });
+  it("reclaims a partial storage failure and keeps failed-delete cleanup retryable",async()=>{
+    const green=await sharp({create:{width:45,height:40,channels:3,background:"green"}}).png().toBuffer();
+    let key="";
+    const failing:PrivateStorage={get:k=>storage.get(k),remove:k=>storage.remove(k),put:async(k,data)=>{key=k;await storage.put(k,data);throw new Error("Synthetic storage interruption");}};
+    await expect(uploadPhoto(owner,draftId,crypto.randomUUID(),green,failing)).rejects.toThrow("Synthetic storage");
+    await access(path.join(root,key));
+    await cleanupMedia({...failing,remove:async()=>{throw new Error("Storage unavailable");}});
+    expect((await db()`SELECT state FROM draft_photographs WHERE storage_key=${key}`)[0].state).toBe("deleting");
+    await cleanupMedia(storage);await expect(access(path.join(root,key))).rejects.toThrow();
+    expect((await db()`SELECT state FROM draft_photographs WHERE storage_key=${key}`)[0].state).toBe("deleted");
+  });
+  it("reconciles database failure after object PUT without accepting an image",async()=>{
+    const orange=await sharp({create:{width:46,height:40,channels:3,background:"orange"}}).png().toBuffer();let key="";
+    const failing:PrivateStorage={get:k=>storage.get(k),remove:k=>storage.remove(k),put:async(k,data)=>{
+      key=k;await storage.put(k,data);
+      // A real PostgreSQL integer overflow on the following version increment,
+      // after the object PUT succeeded (isolated fixture state only).
+      await db()`UPDATE draft_media_state SET version=2147483647 WHERE draft_id=${draftId}`;
+    }};
+    const before=await listMedia(owner,draftId);
+    try{await expect(uploadPhoto(owner,draftId,crypto.randomUUID(),orange,failing)).rejects.toThrow();}
+    finally{await db()`UPDATE draft_media_state SET version=${before.version} WHERE draft_id=${draftId}`;}
+    expect((await listMedia(owner,draftId)).images).toEqual(before.images);
+    await cleanupMedia(storage);await expect(access(path.join(root,key))).rejects.toThrow();
+  });
+  it("deletes a cover, compacts order and never resurrects the removed upload",async()=>{
+    const media=await listMedia(owner,draftId),image=media.images.find(photo=>photo.cover)!;
+    const [receipt]=await db()`SELECT request_id,input_hash,storage_key FROM draft_photographs WHERE id=${image.id}`;
+    const next=await removePhoto(owner,draftId,image.id,media.version);
+    expect(next.images).toHaveLength(1);expect(next.images[0].cover).toBe(true);
+    await expect(retrievePhoto(owner,draftId,image.id,storage)).rejects.toMatchObject({status:404});
+    await cleanupMedia(storage);await expect(access(path.join(root,receipt.storage_key))).rejects.toThrow();
+    await expect(uploadPhoto(owner,draftId,receipt.request_id,bytes,storage)).rejects.toMatchObject({status:409});
+  });
+  it("enforces configurable count and account quotas before writing storage",async()=>{
+    const original=process.env.MEDIA_MAX_IMAGES;process.env.MEDIA_MAX_IMAGES="1";
+    try{await expect(uploadPhoto(owner,draftId,crypto.randomUUID(),Buffer.from("new bytes"),storage)).rejects.toMatchObject({status:409});}
+    finally{if(original===undefined)delete process.env.MEDIA_MAX_IMAGES;else process.env.MEDIA_MAX_IMAGES=original;}
+    const originalBytes=process.env.MEDIA_ACCOUNT_BYTES;process.env.MEDIA_ACCOUNT_BYTES="1";
+    try{await expect(uploadPhoto(owner,draftId,crypto.randomUUID(),Buffer.from("new bytes"),storage)).rejects.toMatchObject({status:409});}
+    finally{if(originalBytes===undefined)delete process.env.MEDIA_ACCOUNT_BYTES;else process.env.MEDIA_ACCOUNT_BYTES=originalBytes;}
+  });
+  it.each(["flatshares","rent","buy"] as const)("supports private photographs for category %s without public records",async category=>{
+    const draft=await createDraft(other,{requestId:crypto.randomUUID(),content:emptyDraft(category)});
+    const media=await uploadPhoto(other,draft.id,crypto.randomUUID(),bytes,storage);
+    expect(media.images).toHaveLength(1);expect((await retrievePhoto(other,draft.id,media.images[0].id,storage)).length).toBeGreaterThan(0);
+    await expect(retrievePhoto(owner,draft.id,media.images[0].id,storage)).rejects.toMatchObject({status:404});
+    await deleteDraft(other,draft.id,{version:draft.version});await cleanupMedia(storage);
+  });
+  it("reserves the final photograph slot atomically under different concurrent requests",async()=>{
+    const draft=await createDraft(other,{requestId:crypto.randomUUID(),content:emptyDraft("rent")});
+    const original=process.env.MEDIA_MAX_IMAGES;process.env.MEDIA_MAX_IMAGES="1";
+    try{
+      const blue=await sharp({create:{width:41,height:30,channels:3,background:"blue"}}).png().toBuffer();
+      const attempts=await Promise.allSettled([uploadPhoto(other,draft.id,crypto.randomUUID(),bytes,storage),uploadPhoto(other,draft.id,crypto.randomUUID(),blue,storage)]);
+      expect(attempts.filter(result=>result.status==='fulfilled')).toHaveLength(1);
+      expect((await listMedia(other,draft.id)).images).toHaveLength(1);
+    }finally{if(original===undefined)delete process.env.MEDIA_MAX_IMAGES;else process.env.MEDIA_MAX_IMAGES=original;}
+    await deleteDraft(other,draft.id,{version:draft.version});await cleanupMedia(storage);
+  });
+  it("cleans abandoned reservations and entire draft deletion without changing public/demo records",async()=>{
+    const id=crypto.randomUUID(),key=`drafts/${draftId}/${id}.webp`;
+    await db()`INSERT INTO draft_photographs(id,draft_id,owner_id,request_id,input_hash,storage_key,state,expires_at) VALUES (${id},${draftId},${owner},${crypto.randomUUID()},${"a".repeat(64)},${key},'pending',now()-interval '1 minute')`;
+    await storage.put(key,Buffer.from("abandoned"));await cleanupMedia(storage);await expect(access(path.join(root,key))).rejects.toThrow();
+    const keys=await db()`SELECT storage_key FROM draft_photographs WHERE draft_id=${draftId} AND state='ready'`;
+    const draft=await readDraft(owner,draftId);await deleteDraft(owner,draftId,{version:draft!.version});
+    await cleanupMedia(storage);
+    for(const row of keys)await expect(access(path.join(root,row.storage_key))).rejects.toThrow();
+    expect((await db()`SELECT count(*)::int AS n FROM listings WHERE is_demo`)[0].n).toBe(24);
+    expect((await db()`SELECT count(*)::int AS n FROM advertisers WHERE is_demo`)[0].n).toBe(24);
   });
 });
 const search = (input: object) => searchListings(parseFilters(input));

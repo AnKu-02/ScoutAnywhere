@@ -1,5 +1,7 @@
 # Private listing drafts — Phase 2.4
 
+**Phase 2.5 update:** drafts now support optional private photographs, cover selection, accessible reordering and deletion. Photo changes save independently of listing text. Authorized image delivery never uses public URLs or the image optimizer; public publishing and verification remain unavailable. See `image-storage.md` for storage setup, migrations 008/009, limits, processing and cleanup. Statements below about deferred uploads describe the Phase 2.4 milestone only.
+
 ## Scope and access
 
 Verified accounts with their own active, non-demo advertiser profile can create, read, edit, delete and privately preview flatshare, rental and sale drafts. `/dashboard/listings` is the entry point. This does not publish, submit for review, verify a property or grant rights over any existing listing. Relationship (`owner`, `broker`, `tenant`) is a separate self-declaration, not derived from profile type. No uploads, documents, contact collection, messaging or payments are added.

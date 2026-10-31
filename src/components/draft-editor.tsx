@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DraftPhotos } from "./draft-photos";
 import { createDraftSchema, draftAmenities, draftCategoryLabels, draftContentSchema, draftReadiness, emptyDraft, relationshipLabels, type DraftContent, type DraftIssue, type ListingDraft } from "@/modules/listing-drafts/validation";
 
 type FieldSpec={key:string;label:string;type?:"number"|"date"|"textarea";max?:number;min?:number;options?:readonly (readonly [string,string])[];placeholder?:string};
@@ -87,7 +88,7 @@ export function DraftEditor({draft}:{draft?:ListingDraft}){
     </div>;
   }
   const sections=fieldsFor(content.category);
-  return <><p className="notice">Private draft only. Your relationship is self-declared, not verified ownership or permission to advertise. Public submissions and photograph uploads are not available.</p>
+  return <><p className="notice">Private draft only. Your relationship is self-declared, not verified ownership or permission to advertise. Photographs remain private; public submissions are not available.</p>
     <form className="account-form draft-form" noValidate onSubmit={async event=>{
       event.preventDefault();if(lock.current)return;
       setIssues([]);setMessage("");setFailed(false);
@@ -127,7 +128,8 @@ export function DraftEditor({draft}:{draft?:ListingDraft}){
       {message&&<p role={failed?"alert":"status"} className={failed?"notice":"account-feedback"}>{message}</p>}
       <p className="muted" role="status">{dirty?"Unsaved changes":"No unsaved changes"}{saved?` · Saved version ${saved.version}`:""}</p>
     </form>
-    <section className="panel" aria-labelledby="draft-readiness"><h2 id="draft-readiness">Next-step checklist</h2><p>Missing details do not stop you saving. Images are deferred.</p>
+    {saved?<DraftPhotos draftId={saved.id} category={saved.content.category}/>:<section><h2>5. Photos</h2><p>Save your draft first to upload private photographs.</p></section>}
+    <section className="panel" aria-labelledby="draft-readiness"><h2 id="draft-readiness">Next-step checklist</h2><p>Missing details do not stop you saving. Photographs are optional at this stage.</p>
       {parsed.success?(readiness.length?<ul>{readiness.map(issue=><li key={issue.field}>{issue.message}</li>)}</ul>:<p>Your listing draft is ready for the next step. Public submissions are not available yet.</p>):<p>Correct invalid values to see the checklist.</p>}
     </section>
     <nav className="account-links" aria-label="Draft navigation">{saved&&<Link href={`/dashboard/listings/${saved.id}/preview`}>Preview saved draft</Link>}<Link href="/dashboard/listings">Back to My Listings</Link></nav>

@@ -2,144 +2,130 @@
 
 **Find your place, anywhere.**
 
-ScoutAnywhere is a housing marketplace designed to make finding, renting, and buying properties in India simpler, more transparent, and more reliable.
+An India-focused housing marketplace, starting with Bengaluru and Mumbai. ScoutAnywhere aims to make finding a flatshare, renting a home, or buying an apartment simpler and more transparent.
 
-Inspired by platforms like ImmoScout24 and WG-Gesucht, ScoutAnywhere aims to bring property discovery and communication into one seamless experience.
+## What works today
 
-## What We're Building
+- **Property discovery:** flatshares, rentals and sales, with filters, sorting, pagination, property details and itemized costs.
+- **Accounts:** email verification, sign-in/out, password reset and private account settings.
+- **Saved properties:** bookmarks that persist across sessions.
+- **Advertiser profiles:** account-owned profiles with server-enforced permissions.
+- **Private listing drafts:** incomplete saves, category-specific forms, readiness checklists and private previews.
+- **Private photographs:** multiple uploads, progress/retry feedback, cover selection, reordering and deletion.
 
-- **Flatshares:** Discover available rooms in shared apartments.
-- **Apartments for Rent:** Explore rental properties listed by owners and brokers.
-- **Apartments for Sale:** Browse residential properties available for purchase.
-- **PG Management:** Connect PG operators with suitable property management solutions.
+The interface uses the **Electric Calm** identity, with Space Grotesk and Plus Jakarta Sans fonts.
 
-## Long-term vision (not implemented in Phase 1)
+> Public discovery contains 24 fictional demo listings. Their illustrations are not property photographs or real availability. Account-owned drafts and uploaded photographs remain private. Nothing can be published or submitted for review yet.
 
-- Property and advertiser verification
-- Location-based search and interactive maps
-- Transparent pricing and brokerage information
-- Secure in-app messaging
-- Property and advertiser reviews
-- Locality insights and neighborhood discovery
+## Run locally
 
-## Phase 1 implementation
+You need Node.js 20.19+ (use a version supported by the locked dependencies), npm and Docker Compose.
 
-Working discovery preview: responsive homepage, flatshares/rent/buy pages, validated URL filters, deterministic sorting and pagination, property details, itemized costs, and informational PG Management and listing-entry pages. All 24 seeded properties and advertisers are fictional, explicitly marked demo data. Locally bundled concept illustrations are **not photographs**. There is no real availability, identity/property verification, submission, inquiry delivery, messaging, AI, map, or payment service. Phase 2.1 adds real account authentication when configured, separate from fictional marketplace data.
-
-### Phase 2.1 — Accounts
-
-Better Auth provides email/password registration, required mailbox verification, sign-in/out, persistent database sessions, password reset and password changes. Protected `/dashboard` and `/account` pages provide private profile/preferences, creation date and optional bundled avatar selection. My listings and messages remain explicitly unavailable placeholders. Interests can overlap and grant no privileges; registering cannot claim demo listings. Real photo uploads and email changes are not implemented.
-
-**Setup:** generate `BETTER_AUTH_SECRET` with `openssl rand -base64 48`, add the auth/SMTP variables from `.env.example` to ignored `.env`, run `docker compose up -d --wait` and `npm run db:migrate`, then restart the dev server. Use localhost port 3000 consistently. Local Mailpit captures verification/reset mail at localhost port 8025; it never delivers to real mailboxes. Missing configuration disables account forms rather than simulating success. See `docs/authentication.md` for complete setup, architecture, permissions, test requirements and production security limitations. No external provider or credentials are assumed.
-
-### Phase 2.2 — Saved Properties
-
-Verified accounts can bookmark specific advertisements from flatshare/rental/sale cards and detail pages, then view or remove them at `/dashboard/saved`. Saved state persists across sessions and synchronizes between cards/details and active tabs. Anonymous bookmark attempts lead to sign-in with an allowlisted listing return path; returning does not automatically save anything. The database stores only user/listing relationships and timestamps, with uniqueness, cascading deletion, account-isolated queries and bounded writes. Only currently published listings are disclosed; drafts/archives are hidden and deleted listings disappear. Current fixtures remain explicitly fictional, not real availability. Run `npm run db:migrate` after updating. See `docs/saved-properties.md` for security, visibility policy, limits and local testing.
-
-Local Phase 2.2 validation: lint/typecheck/build passed, 59 unit tests, 22 isolated-database integration tests, 25 production browser tests (one existing intentional duplicate skip), and the Electric Calm reference test passed. Full results and diagnostic notes: `docs/phase-2.2-validation.md`.
-
-### Phase 2.3 — Advertiser foundation
-
-Existing verified accounts can optionally create and edit a private advertiser profile from **Dashboard → Advertiser** (`/dashboard/advertiser`). Supported self-declared types are Property Owner, Broker / Real Estate Agent, and Existing Flatshare Tenant. Setup collects a display name, Bengaluru/Mumbai operating city and optional short description; account email is not published. Browsing and favorites do not require advertiser setup. An active profile enables editing only: it does **not** verify identity, ownership, tenancy, brokerage credentials or permission to manage a listing. Property submissions remain unavailable.
-
-Migration `006_advertiser_profiles.sql` reuses the existing advertiser entity with a unique account relationship and database-enforced separation from fictional advertisers. A private profile extension stores city/description/status/timestamps; status events are audited and writes are account-rate-limited. No account capabilities or property/listing rights are granted. Run `npm run db:migrate`. See `docs/advertisers.md` for ownership, deny-by-default authorization helpers, future verification design, database lifecycle and manual testing; see `docs/phase-2.3-validation.md` for executed checks.
-
-Local Phase 2.3 validation: lint/typecheck/build passed, **97 unit tests**, **31 isolated-database integration tests**, **27 production browser tests** (one existing intentional duplicate skip), and the Electric Calm reference test passed. Advertiser desktop/mobile layouts were checked at 375px, 768px and 1440px.
-
-### Phase 2.4 — Private listing drafts
-
-Verified accounts with their own active advertiser profile can create, save incomplete, edit, delete and privately preview flatshare, rental and sale drafts at `/dashboard/listings`. Category-specific property/room/home/advertisement sections and self-declared relationships remain isolated from public marketplace data. Ownership constraints, optimistic versions, creation retry receipts, bounded requests and account write limits protect storage. Nothing is published, submitted for review or verified; photographs/uploads remain deferred. Run `npm run db:migrate` for forward migration 007, including your separate test database. See `docs/listing-drafts.md` for validation, access, concurrency, limits and local environment notes. Historical phase descriptions above do not override this scope.
-
-The local Docker Desktop restart blocker is resolved; PostgreSQL and Mailpit restarted healthy with existing volumes and demo records preserved. Continue using the Apple Silicon emulation command below when needed.
-
-Phase 2.4 local validation: lint, TypeScript and production build passed; **128 unit/API tests**, **40 integration tests**, **29 desktop/mobile browser tests** (one existing intentional skip), and **1 design-reference test** passed. Both databases retain all 24 demo listings and advertisers. See `docs/phase-2.4-validation.md` for results and limitations.
-
-### Stack
-
-Next.js App Router, React, TypeScript, Tailwind CSS, Lucide, Zod, PostgreSQL 17 + PostGIS, Postgres.js, Vitest and Playwright. Exact installed versions are recorded in `package-lock.json`. Modular monolith; no AI or geocoding dependencies.
-
-### Local development
-
-Requires Node.js 20.19+ and Docker with Compose (or a PostgreSQL instance with PostGIS). From the repository root:
-
-```sh
+```bash
 npm ci
-cp .env.example .env
+cp .env.example .env  # First setup only; do not overwrite an existing .env
+chmod 600 .env
 docker compose up -d --wait
+```
+
+Generate an authentication secret:
+
+```bash
+openssl rand -base64 48
+```
+
+Set that value as `BETTER_AUTH_SECRET` in `.env`. Keep `.env` private and use `http://localhost:3000` consistently for the app and `BETTER_AUTH_URL`.
+
+Then initialize the development database and start the app:
+
+```bash
 npm run db:migrate
 ALLOW_DEMO_SEED=true npm run db:seed
 npm run dev
 ```
 
-Copy `.env.example` only when `.env` does not already exist; preserve existing configuration. For account verification and password-reset testing, generate a local `BETTER_AUTH_SECRET` as described in `docs/authentication.md`. Never commit `.env`.
+- **App:** http://localhost:3000
+- **Local verification/reset email:** http://localhost:8025 (Mailpit; no real email delivery)
+- **Design reference:** http://localhost:3000/design-lab (development only)
 
-**Apple Silicon Macs:** the pinned `postgis/postgis:17-3.5` image did not provide an ARM64 manifest during local validation. Start the documented services using Intel emulation instead:
+The seed creates fictional demo data and skips an already populated listings table. Never run demo seeding against production.
 
-```sh
-DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose up -d --wait
-docker compose ps
+### Try private drafts and photos
+
+Register, verify your email through Mailpit, and create an advertiser profile. Open **Dashboard → My Listings**, save a draft, then add photographs.
+
+JPEG, PNG and WebP are supported, with defaults of 12 photographs per draft and 10 MiB per original. HEIC must be exported as JPEG first. Images are validated, re-encoded and stripped of metadata before private storage. Photo changes save independently of listing text.
+
+Local uploads live in Git-ignored `.private-media/development`, outside `public/`. No paid storage service is required. An optional private S3-compatible adapter is included; see `docs/image-storage.md` for configuration, limits and deployment requirements.
+
+```bash
+npm run media:cleanup  # Reclaim a bounded batch of failed/deleted photo objects
 ```
 
-This command-scoped setting does not change the Compose file. Docker Desktop must be running with emulation available. Both services should report healthy. PostgreSQL uses localhost port 5434; the Mailpit email viewer is at localhost port 8025. These containers provide supporting services only; start the Next.js application separately with `npm run dev`. See `docs/phase-2.3-mac-validation.md` for actual Mac validation results and local tooling limitations.
+Long-lived Node servers also run bounded cleanup every minute. Production/serverless environments need an external scheduled cleanup job and monitoring.
 
-Open localhost on port 3000. Docker binds the database to loopback port 5434. Credentials in Compose are local-development-only; never reuse them for production. `.env` is ignored; no environment secrets are sent to the browser. Use a separate non-production database for demonstration data. The migration user needs permission to install PostGIS; deployed runtime credentials need marketplace read access and narrowly scoped auth/preference writes, not migration or capability-grant privileges.
+## Checks and tests
 
-Migrations run transactionally with an advisory lock and a migration ledger. Seed is transactional, refuses production mode, requires explicit opt-in, and skips if listings already exist; it never truncates existing data. `docker compose down` stops the database without deleting its volume. Do not delete volumes unless you intend to lose local data.
-
-### Testing
-
-```sh
+```bash
 npm run lint
 npm run typecheck
 npm test
 npm run build
 ```
 
-Database and browser tests require a **separate seeded test database**:
+Integration and browser tests require a **separate migrated and seeded test database**. Set `TEST_DATABASE_URL` in `.env`; never point tests at development or production data. For a fresh local test database using the default Compose configuration, run these setup commands once:
 
-```sh
+```bash
 docker compose exec -T db createdb -U scout scoutanywhere_test
-DATABASE_URL=postgres://scout:scout_local_only@localhost:5434/scoutanywhere_test npm run db:migrate
-DATABASE_URL=postgres://scout:scout_local_only@localhost:5434/scoutanywhere_test ALLOW_DEMO_SEED=true npm run db:seed
-export TEST_DATABASE_URL=postgres://scout:scout_local_only@localhost:5434/scoutanywhere_test
-npm run test:integration
-npx playwright install chromium
-npm run build
-docker compose up -d mailpit
-npm run test:e2e
+node --env-file=.env --import tsx --input-type=module -e 'if (!process.env.TEST_DATABASE_URL || process.env.TEST_DATABASE_URL === process.env.DATABASE_URL) throw new Error("Separate test database required"); process.env.DATABASE_URL = process.env.TEST_DATABASE_URL; await import("./scripts/migrate.ts")'
+node --env-file=.env --import tsx --input-type=module -e 'if (!process.env.TEST_DATABASE_URL || process.env.TEST_DATABASE_URL === process.env.DATABASE_URL) throw new Error("Separate test database required"); process.env.DATABASE_URL = process.env.TEST_DATABASE_URL; process.env.ALLOW_DEMO_SEED = "true"; await import("./scripts/seed.ts")'
 ```
 
-Create the test database only once. Browser tests start an isolated production server on port 3100 and cover desktop and mobile Chromium. If Google Chrome is already installed, use `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e`. Test runners do not automatically load `.env`; export `TEST_DATABASE_URL`. Integration tests validate database constraints and perform a deliberately invalid update expected to be rejected; never point tests at real data.
+Skip `createdb` if the test database already exists. Reapply migrations after schema updates, then run:
 
-### Search contract
+```bash
+node --env-file=.env node_modules/vitest/vitest.mjs run tests/integration.test.ts
+node --env-file=.env node_modules/@playwright/test/cli.js install chromium
+npm run build
+node --env-file=.env node_modules/@playwright/test/cli.js test
+node --env-file=.env node_modules/@playwright/test/cli.js test --config=playwright.design.config.ts
+```
 
-Example: `/flatshares?city=Bengaluru&locality=HSR+Layout&maxPrice=15000&furnishing=furnished`.
+Run the production build, production browser tests and development design-reference test **sequentially**: they share `.next`. Stop the development server before starting that sequence. Browser tests use port 3100 and separate private media storage.
 
-City and locality use case-insensitive exact matching (trimmed), not fuzzy/geocoded search. Prices are integer INR; sale filters use the full rupee amount, while cards show lakh/crore. Sorting is `recent`, `price-asc`, or `price-desc`, with stable ID tie-breaks; pages contain six items. Room listings ignore BHK; sales ignore availability dates. `availableBy` means a listing is available **on or before** the chosen date. Flatshare property type refers to the containing building. Household size excludes the incoming resident. Maintenance is monthly, brokerage one-time, utilities extra. Coordinates are illustrative and not shown as real locations.
+Phase 2.5 validation: **151 unit/API tests**, **52 integration tests**, **31 desktop/mobile browser tests** (one existing intentional skip), and **one design-reference test** passed. Hands-on acceptance is still pending. Full results and limitations are in `docs/phase-2.5-validation.md`.
 
-### Project layout
+## Project structure
 
-- `src/app`: server-rendered routes, loading/error/not-found states, semantic style tokens.
-- `src/components`: reusable navigation, search, cards, gallery and detail sections.
-- `src/modules/search`: shared Zod filter boundary, ready for future structured-search adapters.
-- `src/modules/listings`: parameterized database search and detail retrieval.
-- `src/modules/geography`: provider-neutral future geocoder contract only.
-- `db/migrations`, `scripts`: schema and explicit demo seeding.
-- `tests`: unit, real-database integration and browser journeys.
-- `docs/PRD.md`, `docs/architecture.md`, `AGENTS.md`: scope and engineering guidance.
+| Directory | Purpose |
+| --- | --- |
+| `src/app` | Next.js pages and API routes |
+| `src/components` | Shared UI and dashboard controls |
+| `src/modules` | Domain validation, authorization and repositories |
+| `db/migrations` | Forward-only PostgreSQL migrations |
+| `scripts` | Migrations, demo seeding and media cleanup |
+| `tests` | Unit, integration and browser tests |
+| `docs` | Architecture, setup and milestone reports |
 
-### Phase 1.5 — Visual identity and UX
+**Stack:** Next.js App Router, React, TypeScript, PostgreSQL/PostGIS, Better Auth, Zod, Sharp, Tailwind CSS, Vitest and Playwright.
 
-Electric Calm is the selected working identity and only active theme, with locally hosted Space Grotesk headings and Plus Jakarta Sans UI. Homepage search uses one Flatshares/Rent/Buy mode selector; homepage cards are concise while result cards and details expose deposits and charges; filters can collapse; layouts and typography have been refined. Demo disclosures and backend behavior are preserved.
+## Documentation
 
-Run `npm run dev` and open `/design-lab` for the Electric Calm component reference. Alternative theme styles and loaders have been removed. This route returns HTTP 404 in production. Fonts are bundled locally with licenses; no external font service is needed. Design rationale, tokens, font licensing, limitations and the separate development-browser test command are documented in `docs/visual-identity.md`.
+- `docs/architecture.md` — system design and data boundaries
+- `docs/authentication.md` — accounts, email and test setup
+- `docs/saved-properties.md` — saved-listing behavior
+- `docs/advertisers.md` — advertiser profiles and permissions
+- `docs/listing-drafts.md` — draft validation and lifecycle
+- `docs/image-storage.md` — private media setup, security and manual testing
+- `docs/phase-2.5-validation.md` — executed checks and remaining acceptance
+- `docs/visual-identity.md` — Electric Calm design system
+- `docs/PRD.md` — product direction
+- `AGENTS.md` — engineering guidance
 
-Phase 1.5 validation: lint/typecheck/build passed, 21 unit tests, 15 real-database tests, 18 production browser tests and one development-preview test passed. Responsive checks include 375px, 768px and 1440px.
+## Boundaries and future direction
 
-### Limitations and next steps
+Publishing, moderation, identity/property verification, messaging, reviews, maps/geocoding, payments, AI and native apps are **not implemented**. PG Management is informational only. Active advertiser status and uploaded photographs do not establish authenticity, ownership or permission to advertise.
 
-No production deployment or external services are configured. PG inquiry inputs remain disabled; account forms collect minimal private account data only when configured. Electric Calm is the current identity. Supplied artwork stands in for future authorized listing photographs. Search uses bounded offset pagination and locality equality; spatial search is deferred. Before real launch: security review, advertiser ownership controls, moderation and verification workflows, upload safeguards, operational monitoring, deployment secrets/TLS, least-privilege database credentials, backups/recovery, privacy/legal review, data retention/deletion and performance/load testing. AI, messaging, maps, payments, subscriptions and native apps remain separate milestones.
+The longer-term vision includes trusted property discovery, advertiser verification, location-based search, messaging, reviews and locality insights. Each needs a separately scoped implementation.
 
----
-
-*Making housing discovery simpler, one city at a time.*
+This is not a production deployment. Before launch, complete manual acceptance, security/privacy review, durable storage setup, resource limits, monitoring, backups and recovery testing. The optional S3 adapter still needs live-provider validation. See the architecture and media documentation for details.

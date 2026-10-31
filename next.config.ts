@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
+  // Private photographs must never enter Next's public optimization cache.
+  images:{localPatterns:[{pathname:"/images/**",search:""},{pathname:"/avatars/**",search:""}]},
+  outputFileTracingIncludes:{"/api/listing-drafts/**":["./scripts/process-draft-photo.mjs","./node_modules/sharp/**/*","./node_modules/@img/**/*"]},
+  outputFileTracingExcludes:{"/*":["./.private-media/**/*","./.env","./.env.*","./test-results/**/*","./playwright-report/**/*"]},
   async headers() {
     return [{ source: "/(.*)", headers: [
       { key: "X-Content-Type-Options", value: "nosniff" },

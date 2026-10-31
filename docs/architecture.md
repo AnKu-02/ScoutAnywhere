@@ -1,5 +1,9 @@
 # Architecture
 
+## Phase 2.5 update
+
+Private draft photographs use a provider-neutral object interface: owner-only local storage outside public/ for development, or an explicitly configured private S3-compatible bucket. Server-mediated raw uploads create durable database reservations, undergo bounded child-process Sharp decoding/orientation/re-encoding, and become deliverable only after successful object PUT and metadata finalization. Migrations 008/009 add metadata, independent media versions, partial cover/order uniqueness, immutable ownership and cleanup records; prior migrations and public property images are unchanged. Session-authorized content routes use private/no-store headers and are excluded from Next image optimization. A minute-based bounded reconciler/CLI reclaims failed uploads and deleted draft/account objects. See `image-storage.md` for limits, operational security, provider compatibility and future publication considerations. Earlier “no uploads” statements are historical where superseded.
+
 ## Phase 2.4 update
 
 Account-owned private drafts are isolated in `listing_drafts`, not marketplace properties/units/listings. Separate category-aware JSON sections retain the physical property, room/home and advertisement distinction. Composite ownership constraints, immutable relationships, server versions/timestamps, transactional advertiser eligibility locks, creation receipts and account budgets protect writes. Verified server sessions, strict Origin/body validation and owner-scoped projections protect private APIs and previews. A shared Zod contract permits incomplete saves and exposes a separate readiness checklist. No publishing or verified property permission is introduced; public listing authorization still denies management. See `listing-drafts.md` for schema, limits, concurrency, UI behavior and test coverage. Earlier phase statements below are historical where superseded.
