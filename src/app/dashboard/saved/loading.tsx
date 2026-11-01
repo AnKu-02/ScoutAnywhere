@@ -1,0 +1,2 @@
+import { AccountShell } from "@/components/account-shell";
+export default function Loading(){return <AccountShell workspace title="Your Wishlist" description="All the places you've saved, together in one place."><div aria-busy="true" aria-label="Loading Wishlist"><p role="status">Loading your Wishlist…</p><div className="wishlist-skeleton-heading"/><div className="property-grid wishlist-grid">{[1,2,3,4].map(id=><div className="panel wishlist-skeleton" key={id}><div/><span/><span/></div>)}</div></div></AccountShell>;}

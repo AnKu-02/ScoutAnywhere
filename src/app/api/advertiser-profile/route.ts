@@ -31,7 +31,7 @@ export async function PUT(request:Request){
       data=advertiserProfileSchema.parse(JSON.parse(text));
     }catch{return reply({message:"Check your advertiser name, type, city and description. Other fields are not accepted."},400);}
     const result=await saveAdvertiserProfile(session.user.id,data);
-    if(result==="suspended")return reply({message:"This advertiser profile is suspended and cannot be edited. Your housing search and saved properties remain available."},403);
+    if(result==="suspended")return reply({message:"This advertiser profile is suspended and cannot be edited. Your housing search and Wishlist remain available."},403);
     if(result==="limited")return reply({message:"Too many changes. Wait a minute before trying again."},429);
     if(result==="not-found")return reply({message:"Sign in again to continue"},401);
     return reply({message:"Advertiser profile saved."});

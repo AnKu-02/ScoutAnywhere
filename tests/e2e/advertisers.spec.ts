@@ -33,7 +33,7 @@ test("advertiser setup, persistence, security boundaries and two-account isolati
     await register(request,email);
     expect((await request.put("/api/advertiser-profile",{headers:{origin},data:input})).status()).toBe(401); // verified email alone is not a session
     await page.goto("/sign-in");await page.getByLabel("Email address",{exact:true}).fill(email);await page.getByLabel("Password",{exact:true}).fill(password);await page.getByRole("button",{name:"Sign in",exact:true}).click();await expect(page).toHaveURL(/dashboard/);
-    await page.getByRole("link",{name:"Become an advertiser",exact:true}).click();
+    await page.getByRole("link",{name:/^Set up profile/}).click();
     await expect(page.getByRole("heading",{name:"Become an advertiser",exact:true})).toBeVisible();
     await expect(advertiserForm.getByLabel("Advertiser display name",{exact:true})).toHaveValue("Advertiser Tester");
     await advertiserForm.getByLabel("Advertiser display name",{exact:true}).fill(input.displayName);
@@ -42,12 +42,12 @@ test("advertiser setup, persistence, security boundaries and two-account isolati
     await advertiserForm.getByLabel("Short description (optional)",{exact:true}).fill(input.description);
     await page.getByRole("button",{name:"Create advertiser profile",exact:true}).click();await expect(page.getByRole("status")).toContainText("Advertiser profile saved.");
     await expect(page.getByText("Active profile — editing enabled",{exact:true})).toBeVisible();
-    await expect(page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"Advertiser",exact:true})).toHaveAttribute("aria-current","page");
+    await expect(page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"Advertiser Profile",exact:true})).toHaveAttribute("aria-current","page");
     await expect(page.getByRole("link",{name:"Create your first private draft",exact:true})).toHaveAttribute("href","/dashboard/listings/new");
     await page.getByRole("link",{name:"Create your first private draft",exact:true}).click();
     await expect(page.getByRole("heading",{name:"Create private draft",exact:true})).toBeVisible();
     await expect(page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"My Listings",exact:true})).toHaveAttribute("aria-current","page");
-    await page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"Advertiser",exact:true}).click();
+    await page.getByRole("navigation",{name:"Account navigation"}).getByRole("link",{name:"Advertiser Profile",exact:true}).click();
     await expect(page).toHaveURL(origin+"/dashboard/advertiser");
     await expect(advertiserForm.getByLabel("Advertiser display name",{exact:true})).toBeVisible();
     await page.reload();await expect(advertiserForm.getByLabel("Advertiser display name",{exact:true})).toHaveValue(input.displayName);
@@ -85,12 +85,12 @@ test("advertiser setup, persistence, security boundaries and two-account isolati
     expect((await(await page.request.get("/api/advertiser-profile")).json()).profile.displayName).toBe("Updated private advertiser");
     await page.goto("/dashboard");await page.getByRole("button",{name:"Sign out",exact:true}).click();await expect(page).toHaveURL(/sign-in/);
     await page.getByLabel("Email address",{exact:true}).fill(email);await page.getByLabel("Password",{exact:true}).fill(password);await page.getByRole("button",{name:"Sign in",exact:true}).click();await expect(page).toHaveURL(/dashboard/);
-    await page.getByRole("link",{name:"Advertiser",exact:true}).click();await expect(advertiserForm.getByLabel("Advertiser display name",{exact:true})).toHaveValue("Updated private advertiser");
+    await page.getByRole("link",{name:"Advertiser Profile",exact:true}).click();await expect(advertiserForm.getByLabel("Advertiser display name",{exact:true})).toHaveValue("Updated private advertiser");
     await sql`UPDATE advertiser_profiles SET status='suspended' WHERE user_id=${user.id}`;
     await page.reload();await expect(page.getByRole("button",{name:"Save advertiser profile",exact:true})).toBeDisabled();
     expect((await page.request.put("/api/advertiser-profile",{headers:{origin},data:input})).status()).toBe(403);
-    await page.goto("/dashboard/saved");await expect(page.getByRole("heading",{name:"Saved Properties",exact:true})).toBeVisible();
-    await expect(page.getByRole("heading",{name:"You haven't saved any properties yet.",exact:true})).toBeVisible();
+    await page.goto("/dashboard/saved");await expect(page.getByRole("heading",{name:"Your Wishlist",exact:true})).toBeVisible();
+    await expect(page.getByRole("heading",{name:"Your Wishlist is waiting.",exact:true})).toBeVisible();
     expect((await sql`SELECT count(*)::int AS n FROM listings WHERE is_demo`)[0].n).toBe(24);
   }finally{await other?.close();await sql`DELETE FROM auth_user WHERE email IN (${email},${secondEmail})`;await sql.end();}
 });

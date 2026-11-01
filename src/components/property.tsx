@@ -8,7 +8,7 @@ import { SaveListingButton } from "./saved-properties";
 export function PropertyCard({ listing: l, variant = "full" }: { listing: Listing; variant?: "full"|"compact" }) {
   const images=listingIllustrations(l),image=l.is_demo?images[0]:images[l.images.findIndex(image=>image.cover)]??images[0];
   return <article className={`property-card property-card-${variant}`}>
-    <div className="card-image"><Image unoptimized={!l.is_demo} src={image?.path ?? "/images/building.svg"} alt={image?.alt ?? "Property illustration"} width={image?.width ?? 800} height={image?.height ?? 520} sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1100px) 45vw, 400px"/>{l.is_demo&&!image?.path.startsWith("/images/demo/")&&<span className="image-badge">Fictional demo · Illustration</span>}</div>
+    <div className="card-image"><SaveListingButton listingId={l.id} title={l.title} compact/><Image unoptimized={!l.is_demo} src={image?.path ?? "/images/building.svg"} alt={image?.alt ?? "Property illustration"} width={image?.width ?? 800} height={image?.height ?? 520} sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1100px) 45vw, 400px"/>{l.is_demo&&!image?.path.startsWith("/images/demo/")&&<span className="image-badge">Fictional demo · Illustration</span>}</div>
     <div className="card-body">
       {image?.path.startsWith("/images/demo/")&&<p className="demo-photo-label">Fictional demo · Not real availability</p>}
       {!l.is_demo&&<p className="demo-photo-label">Advertiser supplied · Not independently verified</p>}
@@ -18,7 +18,6 @@ export function PropertyCard({ listing: l, variant = "full" }: { listing: Listin
       <div className="card-price"><strong>{price(l.price, l.category === "buy")}</strong><span>{l.category === "buy" ? "asking price" : "/ month"}</span></div>
       <div className="card-facts"><span><BedDouble size={16} aria-hidden="true"/>{l.furnishing.replaceAll("-", " ")}</span><span>{l.category === "flatshares" ? `${l.household_size} existing residents` : `${l.carpet_sqft} sq ft carpet`}</span></div>
       {variant === "full" ? <dl className="card-costs">{l.category !== "buy" && <div><dt>Deposit</dt><dd>{inr(l.deposit ?? 0)}</dd></div>}{l.maintenance!==null&&<div><dt>Maintenance / month</dt><dd>{inr(l.maintenance)}</dd></div>}{l.brokerage > 0 && <div><dt>Brokerage · one-time</dt><dd>{inr(l.brokerage)}</dd></div>}</dl> : <p className="compact-cost-note">{l.maintenance!==null&&`+ ${inr(l.maintenance)} maintenance / month. `}{l.category!=="buy" && "Deposit extra. "}Full costs in details.</p>}
-      <SaveListingButton listingId={l.id} title={l.title}/>
       <div className="card-bottom"><span className={`tag ${l.brokerage===0?"tag-accent":""}`}>{l.brokerage===0?"No brokerage":"Brokerage applies"}</span><span className="card-action">View details <ArrowUpRight size={17} aria-hidden="true"/></span></div>
     </div></article>;
 }

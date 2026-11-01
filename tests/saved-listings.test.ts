@@ -1,11 +1,13 @@
 import {describe,it,expect} from "vitest";
-import {savedWriteSchema,savedPage} from "../src/modules/saved-listings/validation";
+import {savedWriteSchema,savedPage,wishlistCategory} from "../src/modules/saved-listings/validation";
 import {accountDestination} from "../src/modules/auth/destination";
 describe("saved listing input",()=>{
   it("accepts listing identity only",()=>expect(savedWriteSchema.parse({listingId:8})).toEqual({listingId:8}));
   it.each([0,-1,1.2,2147483648,"8",null])("rejects invalid listing ID %s",listingId=>expect(savedWriteSchema.safeParse({listingId}).success).toBe(false));
   it("rejects user IDs and extra authority fields",()=>expect(savedWriteSchema.safeParse({listingId:8,userId:"another-user"}).success).toBe(false));
   it("bounds saved pagination",()=>{expect(savedPage("2")).toBe(2);for(const value of ["0","-1","1000",[],undefined,"1;DROP"])expect(savedPage(value)).toBe(1);});
+  it.each(["flatshares","rent","buy"])("accepts Wishlist category %s through shared search validation",category=>expect(wishlistCategory(category)).toBe(category));
+  it.each(["all","",null,undefined,[],["rent"],"Rent","unknown","rent;DROP"])("defaults invalid or absent Wishlist category %s to all",category=>expect(wishlistCategory(category)).toBe("all"));
 });
 describe("account return destination",()=>{
   it("allows a specific internal listing and saved dashboard",()=>{expect(accountDestination("/listings/8")).toBe("/listings/8");expect(accountDestination("/dashboard/saved")).toBe("/dashboard/saved");});

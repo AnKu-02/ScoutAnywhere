@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const session = await currentSession(request.headers);
     if (!session) return reply({authenticated:false, ids:[]});
     return reply({authenticated:true, ids:await savedListingIds(session.user.id)});
-  } catch { return reply({message:"Saved properties are temporarily unavailable"},503); }
+  } catch { return reply({message:"Wishlist is temporarily unavailable"},503); }
 }
 async function write(request: Request) {
   if (!authReady()) return reply({message:"Account services are not configured"},503);
@@ -23,7 +23,7 @@ async function write(request: Request) {
   if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return reply({message:"Use application/json"},415);
   try {
     const session = await currentSession(request.headers);
-    if (!session) return reply({message:"Sign in with a verified email to save properties"},401);
+    if (!session) return reply({message:"Sign in with a verified email to add properties to your Wishlist"},401);
     const text = await boundedBody(request,1024);
     if (text === null) return reply({message:"Request too large"},413);
     let input;
@@ -32,9 +32,9 @@ async function write(request: Request) {
     const result = await setSavedListing(session.user.id,input.listingId,request.method === "PUT");
     if (result === "not-found") return reply({message:"This listing is not available to save"},404);
     if (result === "limited") return reply({message:"Too many changes. Wait a minute and try again."},429);
-    if (result === "full") return reply({message:"Your collection is full (500 listings). Remove a saved listing first."},409);
+    if (result === "full") return reply({message:"Your Wishlist is full (500 listings). Remove a listing from your Wishlist first."},409);
     return reply({saved:result === "saved",listingId:input.listingId});
-  } catch { return reply({message:"Could not update saved properties. Please retry."},503); }
+  } catch { return reply({message:"Could not update Wishlist. Please retry."},503); }
 }
 export const PUT = write;
 export const DELETE = write;

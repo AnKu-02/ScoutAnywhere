@@ -45,7 +45,7 @@ test("verified registration, sessions, profile ownership, reset and logout",asyn
     const unverified=await request.post("/api/auth/sign-in/email",{headers:{origin},data:{email,password}});expect(unverified.status()).toBe(403);
     const verify=await emailLink(request,email,"verify-email");await page.goto(verify);
     await page.goto("/sign-in");await page.getByLabel("Email address",{exact:true}).fill(email);await page.getByLabel("Password",{exact:true}).fill(password);await page.getByRole("button",{name:"Sign in",exact:true}).click();await expect(page).toHaveURL(/dashboard/);
-    await page.reload();await expect(page.getByRole("heading",{name:"Hello, Account Tester"})).toBeVisible();
+    await page.reload();await expect(page.getByText("Welcome back, Account Tester.",{exact:true}).filter({visible:true})).toBeVisible();
     const cookies=await page.context().cookies();expect(cookies.some(c=>c.name.includes("session_token")&&c.httpOnly&&c.sameSite==="Lax")).toBe(true);
     expect(await page.evaluate(()=>Object.keys(localStorage))).toEqual([]);
     expect((await page.request.post("/api/auth/change-password",{headers:{origin},data:{currentPassword:"wrong-password",newPassword:password+"-changed",revokeOtherSessions:true}})).ok()).toBe(false);
