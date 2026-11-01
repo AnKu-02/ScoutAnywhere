@@ -2,10 +2,11 @@
 export async function register(){
   if(process.env.NEXT_RUNTIME!=="nodejs")return;
   const {cleanupMedia}=await import("./modules/draft-media/repository");
+  const {cleanupPublicMedia}=await import("./modules/publications/repository");
   let running=false;
   const timer=setInterval(async()=>{
     if(running)return;running=true;
-    try{await cleanupMedia();}catch{/* DB/storage outage: retry next tick, never log keys or credentials. */}
+    try{await cleanupMedia();await cleanupPublicMedia();}catch{/* DB/storage outage: retry next tick, never log keys or credentials. */}
     finally{running=false;}
   },60000);
   timer.unref();

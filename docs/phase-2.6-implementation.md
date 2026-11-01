@@ -1,5 +1,10 @@
 # Phase 2.6 — private listing submission and human moderation
 
+## Phase 2.7 implemented update
+
+Controlled operator publication now consumes a specifically approved immutable snapshot, separately from moderation. See `phase-2.7-implementation.md` for the authoritative publisher capability, strict field mapping/canonical location blockers, public property/unit/listing linkage, deterministic media promotion, independent retention, unpublishing, audit and privacy limitations. Approval alone never publishes or verifies rights. Historical “publishing unavailable” statements below are superseded only for this separately authorized workflow. Execution results: `phase-2.7-validation.md`.
+
+
 ## Boundary and lifecycle
 
 Public discovery, demo data and public schema are unchanged. Approval means **Approved, not published**, not verified ownership, identity, brokerage credentials or permission over a public property. There is no publication API or email notification service.

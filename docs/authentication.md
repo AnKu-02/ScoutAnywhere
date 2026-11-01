@@ -1,5 +1,10 @@
 # Phase 2.1 authentication and accounts
 
+## Phase 2.7 implemented update
+
+Controlled operator publication now consumes a specifically approved immutable snapshot, separately from moderation. See `phase-2.7-implementation.md` for the authoritative publisher capability, strict field mapping/canonical location blockers, public property/unit/listing linkage, deterministic media promotion, independent retention, unpublishing, audit and privacy limitations. Approval alone never publishes or verifies rights. Historical “publishing unavailable” statements below are superseded only for this separately authorized workflow. Execution results: `phase-2.7-validation.md`.
+
+
 Phase 2.2 adds a verified-session-owned Saved Properties collection at `/dashboard/saved`; its data/visibility/CSRF and testing boundaries are documented in `saved-properties.md`. It replaces only the Saved Properties placeholder, not the unavailable listing/message workflows. The authentication mechanism itself is unchanged.
 
 ## Architecture

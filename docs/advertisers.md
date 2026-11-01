@@ -1,5 +1,10 @@
 # Phase 2.3 — Advertiser accounts and permission boundaries
 
+## Phase 2.7 implemented update
+
+Controlled operator publication now consumes a specifically approved immutable snapshot, separately from moderation. See `phase-2.7-implementation.md` for the authoritative publisher capability, strict field mapping/canonical location blockers, public property/unit/listing linkage, deterministic media promotion, independent retention, unpublishing, audit and privacy limitations. Approval alone never publishes or verifies rights. Historical “publishing unavailable” statements below are superseded only for this separately authorized workflow. Execution results: `phase-2.7-validation.md`.
+
+
 **Phase 2.4 update:** active own non-demo profiles now enable separate account-owned private listing drafts. They do not enable public listing management, publication, verification or claims over demo properties. Suspension blocks draft reads and writes too. See `listing-drafts.md`; the Phase 2.3 restrictions and proposed future workflow below are historical where superseded. The public `canManageListing` / `canPublishListing` gates still deny access.
 
 ## Implemented scope

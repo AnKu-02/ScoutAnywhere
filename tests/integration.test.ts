@@ -17,10 +17,134 @@ import path from "node:path";
 import { LocalPrivateStorage,type PrivateStorage } from "../src/modules/draft-media/storage";
 import { uploadPhoto,listMedia,retrievePhoto,removePhoto,arrangeMedia,cleanupMedia } from "../src/modules/draft-media/repository";
 import { submitDraft, readSubmission, decideSubmission, submittedPhoto, reviewQueue, ownSubmissions } from "../src/modules/submissions/repository";
+import { publishSubmission,unpublishSubmission,publicationPreview,publicationQueue,publicPhoto,publisherPhoto,cleanupPublicMedia,isPublisher } from "../src/modules/publications/repository";
 beforeAll(() => {
   if (!process.env.TEST_DATABASE_URL) throw new Error("Set TEST_DATABASE_URL to a migrated, seeded test database.");
   if (process.env.TEST_DATABASE_URL===process.env.DATABASE_URL) throw new Error("Test database must be separate from application database.");
   process.env.DATABASE_URL=process.env.TEST_DATABASE_URL;
+});
+
+describe("controlled approved-snapshot publication",()=>{
+  const owner=`publication-owner-${crypto.randomUUID()}`,moderator=`publication-moderator-${crypto.randomUUID()}`,operator=`publication-operator-${crypto.randomUUID()}`,viewer=`publication-viewer-${crypto.randomUUID()}`;
+  let root:string,storage:LocalPrivateStorage,bytes:Buffer,locality:{city:string;locality:string;pinCode:string};
+  const action={action:"publish",reason:"Operator checked exact approved snapshot and public address"};
+  const makeContent=(category:"rent"|"buy"|"flatshares"="rent")=>({category,relationship:"owner",property:{...locality,building:"Synthetic publication test building",address:"Synthetic test street",propertyType:"apartment",amenities:["Lift","Water supply"]},unit:category==='flatshares'?{bedroom:"shared",occupants:2,furnishing:"furnished",householdInfo:"Quiet test household"}:category==='buy'?{bhk:3,carpetSqft:1200,furnishing:"semi-furnished",propertyAge:5,projectInfo:"Synthetic project"}:{bhk:2,carpetSqft:900,furnishing:"furnished",bathrooms:2},advertisement:{title:`Publication ${crypto.randomUUID()}`,description:"A spacious synthetic test home with excellent natural light and convenient access to local shops.",brokerage:0,brokerageTerms:"No brokerage",...(category==='buy'?{askingPrice:10000000}:{monthlyRent:30000,deposit:0,maintenance:0,availableFrom:"2026-11-01",...(category==='flatshares'?{utilities:1500,utilityTerms:"Shared equally"}:{})})}});
+  const prepare=async(category:"rent"|"buy"|"flatshares"="rent",approve=true,incomplete=false)=>{
+    const content=makeContent(category);if(incomplete)content.property.building="";
+    const draft=await createDraft(owner,{requestId:crypto.randomUUID(),content});
+    await uploadPhoto(owner,draft.id,crypto.randomUUID(),bytes,storage);
+    const uploaded=await uploadPhoto(owner,draft.id,crypto.randomUUID(),await sharp({create:{width:70,height:45,channels:3,background:"#6747ff"}}).png().toBuffer(),storage);
+    const media=await arrangeMedia(owner,draft.id,{version:uploaded.version,ids:uploaded.images.map(p=>p.id),coverId:uploaded.images[1].id});
+    const submission=await submitDraft(owner,{requestId:crypto.randomUUID(),draftId:draft.id,version:1,mediaVersion:media.version});
+    if(approve)await decideSubmission(moderator,submission.id,{version:1,decision:"approved",reason:"Synthetic test review confirms completeness"});
+    return {draft,submission,content,media};
+  };
+  beforeAll(async()=>{
+    root=await mkdtemp(path.join(os.tmpdir(),"scout-publications-"));storage=new LocalPrivateStorage(root);bytes=await sharp({create:{width:80,height:50,channels:3,background:"#c7f75d"}}).png().toBuffer();
+    [locality]=await db()`SELECT c.name AS city,l.locality,l.pin_code AS "pinCode" FROM locations l JOIN cities c ON c.id=l.city_id WHERE c.name='Bengaluru' ORDER BY l.id LIMIT 1`;
+    for(const id of [owner,moderator,operator,viewer])await db()`INSERT INTO auth_user(id,name,email,"emailVerified") VALUES (${id},'Publication test',${id+'@example.test'},true)`;
+    await saveAdvertiserProfile(owner,{displayName:"Approved snapshot advertiser",type:"owner",primaryCity:"Bengaluru",description:"Private profile details never public"});
+    await db()`INSERT INTO account_capabilities(user_id,capability) VALUES (${moderator},'moderator'),(${operator},'publisher'),(${owner},'publisher')`;
+  });
+  afterAll(async()=>{
+    const pending=await db()`SELECT id,version FROM listing_submissions WHERE user_id=${owner} AND state='pending'`;for(const s of pending)await decideSubmission(owner,s.id,{version:s.version,decision:"withdrawn",reason:"Synthetic publication fixture cleanup"});
+    const live=await db()`SELECT p.submission_id FROM listing_publications p JOIN listing_submissions s ON s.id=p.submission_id WHERE s.user_id=${owner} AND p.state='published'`;for(const p of live)await unpublishSubmission(operator,p.submission_id,{action:"unpublish",reason:"Synthetic publication fixture cleanup"});
+    await cleanupPublicMedia(storage,100);await cleanupMedia(storage,100);await rm(root,{recursive:true,force:true});
+    // Immutable publication/audit linkage intentionally retains its synthetic originating account.
+    await db()`DELETE FROM auth_user WHERE id IN (${moderator},${operator},${viewer})`;
+    await db()`DELETE FROM account_capabilities WHERE user_id=${owner}`;
+  });
+  it("requires independent explicit publishing authority, not moderator/profile status",async()=>{
+    const {submission}=await prepare();expect(await isPublisher(moderator)).toBe(false);
+    await expect(publicationQueue(moderator)).rejects.toMatchObject({status:403});
+    await expect(publishSubmission(moderator,submission.id,action,storage)).rejects.toMatchObject({status:403});
+    await expect(publishSubmission(owner,submission.id,action,storage)).rejects.toMatchObject({status:403});
+    await expect(publishSubmission(operator,crypto.randomUUID(),action,storage)).rejects.toMatchObject({status:404});
+    const preview=await publicationPreview(operator,submission.id);expect(preview.blockers).toEqual([]);expect(JSON.stringify(preview)).not.toContain('drafts/');
+    expect((await publisherPhoto(operator,submission.id,submission.photos[0].id,storage)).length).toBeGreaterThan(0);
+  });
+  it("approval alone creates no public record and incomplete snapshots cannot publish",async()=>{
+    const {submission}=await prepare();expect(await db()`SELECT id FROM listing_publications WHERE submission_id=${submission.id}`).toHaveLength(0);
+    const pending=await prepare("rent",false);await expect(publishSubmission(operator,pending.submission.id,action,storage)).rejects.toMatchObject({status:422});
+    const incomplete=await prepare("rent",true,true);expect((await publicationPreview(operator,incomplete.submission.id)).blockers.join(" ")).toContain("building");await expect(publishSubmission(operator,incomplete.submission.id,action,storage)).rejects.toMatchObject({status:422});
+  });
+  it.each(["rent","buy","flatshares"] as const)("publishes normalized %s, selected cover/order and approved advertiser data only",async category=>{
+    const {submission,draft,content}=await prepare(category);
+    await updateDraft(owner,draft.id,{version:1,content:{...content,advertisement:{...content.advertisement,title:"NEW PRIVATE WORKING TITLE"}}});
+    await saveAdvertiserProfile(owner,{displayName:"Changed private profile",type:"owner",primaryCity:"Bengaluru",description:"Private information"});
+    const p=await publishSubmission(operator,submission.id,action,storage);expect(p.state).toBe("published");expect(p.listingId).not.toBeNull();
+    const listing=(await getListing(p.listingId!))!;expect(listing.title).toBe(content.advertisement.title);expect(listing.advertiser).toBe(submission.advertiserName);expect(listing.is_demo).toBe(false);expect(listing.declared_relationship).toBe("owner");expect(listing.building).toBe(content.property.building);
+    expect(listing.images.map(image=>image.path)).toEqual(submission.photos.map(photo=>`/images/published/${p.id}/${photo.id}`));expect(listing.images.map(image=>image.cover)).toEqual([false,true]);
+    expect((await searchListings(parseFilters({category}))).items.some(item=>item.id===p.listingId)).toBe(true);
+    for(const photo of submission.photos)expect((await publicPhoto(p.id,photo.id,storage)).length).toBe(photo.size);
+    if(category==='buy'){expect(listing.maintenance).toBeNull();expect(listing.public_details).toMatchObject({propertyAge:5,projectInfo:"Synthetic project"});}
+    if(category==='flatshares')expect(listing.public_details).toMatchObject({bedroom:"shared",utilities:1500,householdInfo:"Quiet test household"});
+    expect((await readSubmission(owner,submission.id)).submission.state).toBe("approved");
+    expect(await cleanupPublicMedia(storage,100)).toBe(0);expect((await publicPhoto(p.id,submission.photos[0].id,storage)).length).toBeGreaterThan(0);
+  });
+  it("serializes concurrent operators and repeated requests into one stable public identity",async()=>{
+    const {submission}=await prepare();await db()`INSERT INTO account_capabilities(user_id,capability) VALUES (${moderator},'publisher')`;
+    const result=await Promise.all([publishSubmission(operator,submission.id,action,storage),publishSubmission(moderator,submission.id,action,storage),publishSubmission(operator,submission.id,action,storage)]);expect(new Set(result.map(p=>p.listingId)).size).toBe(1);
+    expect(await db()`SELECT id FROM listing_publications WHERE submission_id=${submission.id}`).toHaveLength(1);expect(await db()`SELECT id FROM publication_events WHERE publication_id=${result[0].id}`).toHaveLength(1);
+    await db()`DELETE FROM account_capabilities WHERE user_id=${moderator} AND capability='publisher'`;
+  });
+  it("resumes partial media promotion without visibility or duplicate public rows",async()=>{
+    const {submission}=await prepare();let puts=0;const failing:PrivateStorage={get:key=>storage.get(key),remove:key=>storage.remove(key),put:async(key,value)=>{puts++;if(puts===2)throw Error("Storage outage");await storage.put(key,value);}};
+    const before=(await db()`SELECT count(*)::int AS n FROM listings`)[0].n;
+    await expect(publishSubmission(operator,submission.id,action,failing)).rejects.toThrow("Storage outage");
+    const [p]=await db()`SELECT * FROM listing_publications WHERE submission_id=${submission.id}`;expect(p.state).toBe("preparing");expect(p.listing_id).toBeNull();expect((await db()`SELECT count(*)::int AS n FROM listings`)[0].n).toBe(before);
+    await expect(publicPhoto(p.id,submission.photos[0].id,storage)).rejects.toMatchObject({status:404});
+    const recovered=await publishSubmission(operator,submission.id,action,storage);expect(recovered.id).toBe(p.id);expect(recovered.state).toBe("published");
+  });
+  it("rejects unavailable originals and recovers after restoration",async()=>{
+    const {submission}=await prepare();const photo=submission.photos[0],original=await storage.get(photo.key);await storage.remove(photo.key);
+    await expect(publishSubmission(operator,submission.id,action,storage)).rejects.toMatchObject({status:409});await storage.put(photo.key,original);
+    const p=await publishSubmission(operator,submission.id,action,storage);expect(p.state).toBe("published");
+  });
+  it("rejects expired approval and cleans abandoned copies before retrying the same reservation",async()=>{
+    const {submission}=await prepare();
+    const approved=(await readSubmission(owner,submission.id)).submission;
+    const clock=vi.spyOn(Date,"now").mockReturnValue(new Date(approved.retainUntil!).getTime()+1000);
+    try{expect((await publicationPreview(operator,submission.id)).blockers.join(" ")).toContain("expired");await expect(publishSubmission(operator,submission.id,action,storage)).rejects.toMatchObject({status:422});}
+    finally{clock.mockRestore();}
+    let puts=0;const fail:PrivateStorage={get:key=>storage.get(key),remove:key=>storage.remove(key),put:async(key,value)=>{if(++puts===2)throw Error("Interrupted promotion");await storage.put(key,value);}};
+    await expect(publishSubmission(operator,submission.id,action,fail)).rejects.toThrow();const [p]=await db()`SELECT * FROM listing_publications WHERE submission_id=${submission.id}`;
+    await db()`UPDATE listing_publications SET lease_until=now()-interval '1 minute' WHERE id=${p.id}`;
+    await cleanupPublicMedia(storage,100);await expect(storage.get(`publications/${p.id}/${submission.photos[0].id}.webp`)).rejects.toThrow();
+    const recovered=await publishSubmission(operator,submission.id,action,storage);expect(recovered.id).toBe(p.id);expect(recovered.state).toBe("published");
+    await expect(db()`UPDATE listing_publications SET state='preparing',listing_id=NULL WHERE id=${p.id}`).rejects.toThrow();
+    await expect(db()`UPDATE publication_media SET removed_at=now() WHERE publication_id=${p.id}`).rejects.toThrow();
+    await expect(db()`DELETE FROM auth_user WHERE id=${owner}`).rejects.toThrow();
+  });
+  it("rolls back public records on database failure after object promotion",async()=>{
+    const {submission}=await prepare();
+    const before=(await db()`SELECT count(*)::int AS n FROM listings`)[0].n;
+    // A test-only trigger fails only the exact fixture title after the service has promoted photos.
+    // The scoped title condition is embedded through a fixture table, never runtime application SQL.
+    await db()`CREATE TABLE IF NOT EXISTS publication_failure_fixture(title text PRIMARY KEY)`;
+    await db()`CREATE OR REPLACE FUNCTION fail_publication_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF EXISTS(SELECT 1 FROM publication_failure_fixture WHERE title=NEW.title) THEN RAISE EXCEPTION 'Synthetic database failure'; END IF; RETURN NEW; END; $$`;
+    await db()`CREATE TRIGGER publication_failure_fixture BEFORE INSERT ON listings FOR EACH ROW EXECUTE FUNCTION fail_publication_fixture()`;
+    await db()`INSERT INTO publication_failure_fixture(title) VALUES (${submission.content.advertisement.title!})`;
+    try{await expect(publishSubmission(operator,submission.id,action,storage)).rejects.toThrow("Synthetic database failure");expect((await db()`SELECT count(*)::int AS n FROM listings`)[0].n).toBe(before);expect((await db()`SELECT state FROM listing_publications WHERE submission_id=${submission.id}`)[0].state).toBe("preparing");}
+    finally{await db()`DROP TRIGGER publication_failure_fixture ON listings`;await db()`DROP FUNCTION fail_publication_fixture()`;await db()`DROP TABLE publication_failure_fixture`;}
+    expect((await publishSubmission(operator,submission.id,action,storage)).state).toBe("published");
+  });
+
+  it("enforces revoked permissions on subsequent preview, photos and publication actions",async()=>{
+    const {submission}=await prepare();await db()`DELETE FROM account_capabilities WHERE user_id=${operator} AND capability='publisher'`;
+    try{await expect(publicationPreview(operator,submission.id)).rejects.toMatchObject({status:403});await expect(publisherPhoto(operator,submission.id,submission.photos[0].id,storage)).rejects.toMatchObject({status:403});await expect(publishSubmission(operator,submission.id,action,storage)).rejects.toMatchObject({status:403});}
+    finally{await db()`INSERT INTO account_capabilities(user_id,capability) VALUES (${operator},'publisher')`;}
+  });
+  it("unpublishes idempotently, hides saved details/media and keeps immutable attributed history",async()=>{
+    const {submission}=await prepare(),p=await publishSubmission(operator,submission.id,action,storage);expect(await setSavedListing(viewer,p.listingId!,true)).toBe("saved");
+    const unpublish={action:"unpublish",reason:"Operator withdrew availability for review"};const result=await Promise.all([unpublishSubmission(operator,submission.id,unpublish),unpublishSubmission(operator,submission.id,unpublish)]);expect(result.every(p=>p.state==='unpublished')).toBe(true);
+    expect(await getListing(p.listingId!)).toBeNull();expect((await savedCollection(viewer)).items).not.toContainEqual(expect.objectContaining({id:p.listingId}));await expect(publicPhoto(p.id,submission.photos[0].id,storage)).rejects.toMatchObject({status:404});
+    await expect(publishSubmission(operator,submission.id,action,storage)).rejects.toMatchObject({status:409});
+    const events=await db()`SELECT * FROM publication_events WHERE publication_id=${p.id} ORDER BY id`;expect(events.map(e=>e.action)).toEqual(["publish","unpublish"]);expect(events.every(e=>e.actor_id===operator&&e.submission_id===submission.id&&e.listing_id===p.listingId)).toBe(true);
+    await expect(db()`UPDATE publication_events SET reason='Modified reason' WHERE id=${events[0].id}`).rejects.toThrow();await expect(db()`DELETE FROM publication_events WHERE id=${events[0].id}`).rejects.toThrow();await expect(db()`DELETE FROM listing_publications WHERE id=${p.id}`).rejects.toThrow();
+    await cleanupPublicMedia(storage,100);await expect(storage.get(`publications/${p.id}/${submission.photos[0].id}.webp`)).rejects.toThrow();expect((await readSubmission(owner,submission.id)).submission.state).toBe("approved");
+    expect((await db()`SELECT count(*)::int AS n FROM listings WHERE is_demo`)[0].n).toBe(24);expect((await db()`SELECT count(*)::int AS n FROM advertisers WHERE is_demo`)[0].n).toBe(24);
+  });
 });
 
 describe("private submission snapshots, human decisions and retention",()=>{
@@ -117,7 +241,7 @@ describe("private submission snapshots, human decisions and retention",()=>{
     await decideSubmission(modId,first.id,{version:1,decision:"changes_requested",reason:"Please clarify shared facilities"});
     const second=await submitDraft(userId,{...input,requestId:crypto.randomUUID()});
     await removePhoto(userId,draft.id,media.images[0].id,media.version);
-    let removals=0;const failing:PrivateStorage={put:(key,bytes)=>storage.put(key,bytes),get:key=>storage.get(key),remove:async()=>{removals++;throw new Error("Storage unavailable");}};
+    let removals=0;const failing:PrivateStorage={put:(key,bytes)=>storage.put(key,bytes),get:key=>storage.get(key),remove:async key=>{if(key===second.photos[0].key)removals++;throw new Error("Storage unavailable");}};
     await cleanupMedia(failing,100);expect(removals).toBe(0);
     expect((await submittedPhoto(modId,second.id,media.images[0].id,true,storage)).length).toBeGreaterThan(0);
     const firstRecord=(await readSubmission(userId,first.id)).submission;

@@ -2,20 +2,21 @@ import { db } from "../../lib/db";
 import { PAGE_SIZE, parseFilters, type SearchFilters } from "../search/filters";
 export interface Listing {
   id: number; category: "flatshares" | "rent" | "buy"; title: string; description: string;
-  price: number; deposit: number | null; maintenance: number; brokerage: number;
+  price: number; deposit: number | null; maintenance: number | null; brokerage: number;
+  declared_relationship?: "owner"|"broker"|"tenant"|null; public_details?:{bedroom?:string;householdInfo?:string;utilities?:number;utilityTerms?:string;brokerageTerms?:string;bathrooms?:number;propertyAge?:number;projectInfo?:string};
   available_from: string | null; published_at: string; is_demo: boolean;
   city: string; locality: string; pin_code: string; building: string; address_line: string;
   property_type: string; furnishing: string; bhk: number | null; carpet_sqft: number | null;
   household_size: number | null; house_rules: string | null; advertiser: string; advertiser_kind: string;
-  images: { path: string; alt: string }[]; amenities: string[];
+  images: { path: string; alt: string; cover?:boolean }[]; amenities: string[];
 }
 function baseQuery() {
   const sql = db();
   return sql`SELECT l.id,l.category,l.title,l.description,l.price::float8,l.deposit::float8,l.maintenance,l.brokerage::float8,
     l.available_from::text,l.published_at::text,l.is_demo,c.name AS city,loc.locality,loc.pin_code,
     p.building,p.address_line,p.property_type,u.furnishing,u.bhk,u.carpet_sqft,u.household_size,u.house_rules,
-    a.display_name AS advertiser,a.kind AS advertiser_kind,
-    COALESCE((SELECT json_agg(json_build_object('path',im.path,'alt',im.alt) ORDER BY im.sort_order,im.id) FROM property_images im WHERE im.property_id=p.id AND (im.unit_id IS NULL OR im.unit_id=u.id)),'[]') AS images,
+    COALESCE(l.advertiser_name,a.display_name) AS advertiser,COALESCE(l.declared_relationship,a.kind) AS advertiser_kind,l.declared_relationship,l.public_details,
+    COALESCE((SELECT json_agg(json_build_object('path',im.path,'alt',im.alt,'cover',im.is_cover) ORDER BY im.sort_order,im.id) FROM property_images im WHERE im.property_id=p.id AND (im.unit_id IS NULL OR im.unit_id=u.id)),'[]') AS images,
     COALESCE((SELECT json_agg(am.name ORDER BY am.name) FROM amenities am JOIN property_amenities pa ON pa.amenity_id=am.id WHERE pa.property_id=p.id),'[]') AS amenities
     FROM listings l JOIN units u ON u.id=l.unit_id JOIN properties p ON p.id=u.property_id
     JOIN locations loc ON loc.id=p.location_id JOIN cities c ON c.id=loc.city_id JOIN advertisers a ON a.id=l.advertiser_id`;
@@ -31,7 +32,7 @@ export async function searchListings(input: SearchFilters) {
     ${f.bhk ? sql`AND u.bhk=${f.bhk}` : sql``}
     ${f.furnishing ? sql`AND u.furnishing=${f.furnishing}` : sql``}
     ${f.propertyType ? sql`AND p.property_type=${f.propertyType}` : sql``}
-    ${f.advertiser ? sql`AND a.kind=${f.advertiser}` : sql``}
+    ${f.advertiser ? sql`AND COALESCE(l.declared_relationship,a.kind)=${f.advertiser}` : sql``}
     ${f.brokerageFree === 'true' ? sql`AND l.brokerage=0` : sql``}
     ${f.availableBy ? sql`AND l.available_from<=${f.availableBy}::date` : sql``}`;
   const order = f.sort === "price-asc" ? sql`l.price ASC,l.id ASC` : f.sort === "price-desc" ? sql`l.price DESC,l.id DESC` : sql`l.published_at DESC,l.id DESC`;

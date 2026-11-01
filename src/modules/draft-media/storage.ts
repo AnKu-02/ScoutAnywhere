@@ -5,7 +5,7 @@ import { mediaRoot } from "./config";
 
 export interface PrivateStorage {put(key:string,bytes:Buffer):Promise<void>;get(key:string):Promise<Buffer>;remove(key:string):Promise<void>}
 export function validateStorageKey(key:string){
-  if(!/^drafts\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.webp$/.test(key))throw new Error("Invalid private object key");
+  if(!/^(drafts|publications)\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.webp$/.test(key))throw new Error("Invalid private object key");
   return key;
 }
 export class LocalPrivateStorage implements PrivateStorage {

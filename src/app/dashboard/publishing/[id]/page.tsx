@@ -1,0 +1,21 @@
+/* eslint-disable @next/next/no-img-element -- Preview images are private and must not enter the optimizer. */
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { z } from "zod";
+import { requireAccount } from "@/modules/auth/session";
+import { publicationPreview, PublicationError } from "@/modules/publications/repository";
+import { PublicationControls } from "@/components/publication-controls";
+import { relationshipLabels } from "@/modules/listing-drafts/validation";
+const labels:Record<string,string>={city:"City",locality:"Locality",building:"Building / society",address:"Address",pinCode:"PIN code",propertyType:"Property type",amenities:"Amenities",furnishing:"Furnishing",bedroom:"Bedroom arrangement",occupants:"Existing occupants",houseRules:"House rules",householdInfo:"Household information",bhk:"BHK",bathrooms:"Bathrooms",carpetSqft:"Carpet area (sq ft)",propertyAge:"Property age",projectInfo:"Project information",title:"Title",description:"Description",monthlyRent:"Monthly rent (INR)",deposit:"Deposit (INR)",maintenance:"Maintenance / month (INR)",utilities:"Utilities / month (INR)",utilityTerms:"Utility terms",availableFrom:"Available from",askingPrice:"Asking price (INR)",brokerage:"Brokerage (INR)",brokerageTerms:"Brokerage terms"};
+export default async function Page({params}:{params:Promise<{id:string}>}){
+  const {user}=await requireAccount(),{id}=await params;if(!z.uuid().safeParse(id).success)notFound();
+  let preview;try{preview=await publicationPreview(user.id,id);}catch(error){if(error instanceof PublicationError&&error.status===404)notFound();return <p role="alert">Publication preview unavailable or access denied.</p>;}
+  const p=preview.publication,c=preview.content;
+  return <><h2>{preview.title}</h2><p className="notice">Approved snapshot publication preview — not the working draft. Moderation remains Approved.</p><p>Advertiser: {preview.advertiserName} · {c.relationship?relationshipLabels[c.relationship]:"Not disclosed"} (self-declared, not verified)</p><p>Approved {new Date(preview.approvedAt).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})} IST</p>
+    {p?.state==='published'?<p role="status">Published · <Link href={`/listings/${p.listingId}`}>Open public listing</Link></p>:p?.state==='unpublished'?<p>Unpublished. Republishing requires a future explicit workflow.</p>:<section><h3>Publication readiness</h3>{preview.blockers.length?<ul>{preview.blockers.map((blocker,i)=><li key={i}>{blocker}</li>)}</ul>:<p>Mapping ready. Photographs will be integrity-checked during publication; missing or expired objects block publication.</p>}</section>}
+    <div className="draft-photo-grid">{preview.photos.map((photo,index)=><figure className="photo-card" key={photo.id}><img src={`/api/publications/${id}/photos/${photo.id}`} alt={`Approved property photograph ${index+1}`} width={photo.width} height={photo.height}/><figcaption>{photo.cover?"Selected cover":"Photograph"} · submitted order {index+1}</figcaption></figure>)}</div>
+    {(["property","unit","advertisement"] as const).map(section=><section key={section}><h3>{section==='property'?"Location and property":section==='unit'?"Room / home":"Advertisement and charges"}</h3><dl className="draft-preview">{Object.entries(c[section]).map(([key,value])=><div key={key}><dt>{labels[key]??key}</dt><dd>{Array.isArray(value)?value.join(", "):String(value)}</dd></div>)}</dl></section>)}
+    {p?.state!=='unpublished'&&<PublicationControls submissionId={id} action={p?.state==='published'?"unpublish":"publish"} disabled={p?.state!=='published'&&preview.blockers.length>0}/>}
+    <section><h3>Publication audit history</h3>{!preview.events.length?<p>No publication actions recorded.</p>:<ol>{preview.events.map((event,index)=><li key={index}>{event.action}: {event.reason}<p>Operator account {event.actorId} · {new Date(event.createdAt).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})} IST · {event.previousState} → {event.resultingState}</p></li>)}</ol>}</section><Link href="/dashboard/publishing">Back to approved submissions</Link>
+  </>;
+}

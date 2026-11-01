@@ -1,5 +1,10 @@
 # Phase 2.2 — Saved Properties
 
+## Phase 2.7 implemented update
+
+Controlled operator publication now consumes a specifically approved immutable snapshot, separately from moderation. See `phase-2.7-implementation.md` for the authoritative publisher capability, strict field mapping/canonical location blockers, public property/unit/listing linkage, deterministic media promotion, independent retention, unpublishing, audit and privacy limitations. Approval alone never publishes or verifies rights. Historical “publishing unavailable” statements below are superseded only for this separately authorized workflow. Execution results: `phase-2.7-validation.md`.
+
+
 ## Model and ownership
 
 Forward-only migration `005_saved_listings.sql` adds `saved_listings(user_id, listing_id, saved_at)` with a composite primary key, foreign keys to Better Auth's `auth_user` and marketplace `listings`, and ON DELETE CASCADE for both. Indexed account/time ordering supports private collection browsing; a listing index supports cascade cleanup. Times come from PostgreSQL. No property, price, image or private account information is copied into favorites. Saving an advertisement never grants editing rights or links the account to a fictional advertiser.

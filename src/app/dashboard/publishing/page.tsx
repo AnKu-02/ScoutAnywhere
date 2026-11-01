@@ -1,0 +1,7 @@
+import Link from "next/link";
+import { requireAccount } from "@/modules/auth/session";
+import { publicationQueue } from "@/modules/publications/repository";
+export default async function Page({searchParams}:{searchParams:Promise<{page?:string}>}){
+  const {user}=await requireAccount(),page=Number((await searchParams).page??1);let rows;try{rows=await publicationQueue(user.id,page);}catch{return <p role="alert">Publication queue unavailable.</p>;}
+  return <><h2>Approved submissions</h2><p>Approval and publication are separate. Preview the exact approved snapshot and all blockers before publishing.</p>{!rows.length&&<p>No approved submissions on this page.</p>}{rows.map(row=><article className="panel" key={row.id}><h3>{row.title}</h3><p>{row.category} · {row.city}, {row.locality} · {row.advertiserName}</p><p>Approved {new Date(row.approvedAt).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})} IST · {row.state==='published'?"Published":row.state==='unpublished'?"Unpublished":row.state==='preparing'?"Preparing — retry available":"Approved, not published"}</p><Link href={`/dashboard/publishing/${row.id}`}>Preview publication and readiness</Link></article>)}<nav className="account-links">{page>1&&<Link href={`/dashboard/publishing?page=${page-1}`}>Previous page</Link>}{rows.length===25&&<Link href={`/dashboard/publishing?page=${page+1}`}>Next page</Link>}</nav></>;
+}

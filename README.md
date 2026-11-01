@@ -11,12 +11,13 @@ An India-focused housing marketplace, starting with Bengaluru and Mumbai. ScoutA
 - **Saved properties:** bookmarks that persist across sessions.
 - **Advertiser profiles:** account-owned profiles with server-enforced permissions.
 - **Private listing drafts:** incomplete saves, category-specific forms, readiness checklists and private previews.
+- **Controlled publication:** explicitly granted operators publish exact approved snapshots into existing discovery and can unpublish with audit history. Approval never automatically publishes.
 - **Private human review:** immutable submissions, advertiser feedback/withdrawal, and explicitly authorized moderator decisions. Approval does not publish.
 - **Private photographs:** multiple uploads, progress/retry feedback, cover selection, reordering and deletion.
 
 The interface uses the **Electric Calm** identity, with Space Grotesk and Plus Jakarta Sans fonts.
 
-> Public discovery contains 24 fictional demo listings. Selected galleries use supplied demo photographs; other listings retain concept illustrations. None represents verified real availability. Account-owned drafts and uploaded photographs remain private. Complete drafts can be submitted for private human review; approval does not publish anything.
+> Public discovery retains 24 fictional demo listings and can also show separately labeled operator-published advertiser submissions. Selected galleries use supplied demo photographs; other listings retain concept illustrations. None represents verified real availability. Account-owned drafts and uploaded photographs remain private. Complete drafts can be submitted for private human review; approval alone does not publish anything.
 
 ## Run locally
 
@@ -114,6 +115,17 @@ Phase 2.5 validation: **151 unit/API tests**, **52 integration tests**, **31 des
 
 See `docs/phase-2.6-implementation.md` for readiness, lifecycle, photograph retention, local moderator grants/revocation, and manual testing. Review queue: `/dashboard/moderation`. Moderator access is operator-controlled, never a profile setting.
 
+## Controlled publishing
+
+See `docs/phase-2.7-implementation.md` for the exact public mapping contract, canonical location blockers, lifecycle, media recovery/retention and manual validation. Approved queue/preview: `/dashboard/publishing`. Publishing requires a separate verified-account grant; moderator access does not imply publisher access.
+
+```sh
+node --env-file=.env --import tsx scripts/publisher-access.ts grant ACCOUNT_ID
+node --env-file=.env --import tsx scripts/publisher-access.ts revoke ACCOUNT_ID
+```
+
+Phase 2.7 automated results and production limitations are recorded in `docs/phase-2.7-validation.md`. Replacement, unrestricted republishing, advertiser public editing and legal/identity verification remain out of scope.
+
 ## Documentation
 
 - `docs/architecture.md` — system design and data boundaries
@@ -130,7 +142,7 @@ See `docs/phase-2.6-implementation.md` for readiness, lifecycle, photograph rete
 
 ## Boundaries and future direction
 
-Publishing, identity/property verification, messaging, reviews, maps/geocoding, payments, AI and native apps are **not implemented**. PG Management is informational only. Active advertiser status and uploaded photographs do not establish authenticity, ownership or permission to advertise.
+Identity/property verification, messaging, reviews, maps/geocoding, payments, AI and native apps are **not implemented**. PG Management is informational only. Active advertiser status and uploaded photographs do not establish authenticity, ownership or permission to advertise.
 
 The longer-term vision includes trusted property discovery, advertiser verification, location-based search, messaging, reviews and locality insights. Each needs a separately scoped implementation.
 

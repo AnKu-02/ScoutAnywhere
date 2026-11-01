@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
   // Private photographs must never enter Next's public optimization cache.
-  images:{localPatterns:[{pathname:"/images/**",search:""},{pathname:"/avatars/**",search:""}]},
+  images:{localPatterns:[{pathname:"/images/demo/**",search:""},{pathname:"/images/*.png",search:""},{pathname:"/images/*.svg",search:""},{pathname:"/avatars/**",search:""}]},
   outputFileTracingIncludes:{"/api/listing-drafts/**":["./scripts/process-draft-photo.mjs","./node_modules/sharp/**/*","./node_modules/@img/**/*"]},
   outputFileTracingExcludes:{"/*":["./.private-media/**/*","./.env","./.env.*","./test-results/**/*","./playwright-report/**/*"]},
   async headers() {
@@ -11,7 +11,7 @@ const config: NextConfig = {
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-    ] }, ...["/api/auth/:path*", "/api/account", "/api/saved-listings", "/api/advertiser-profile", "/api/listing-drafts", "/api/listing-drafts/:path*", "/api/submissions", "/api/submissions/:path*", "/api/moderation", "/api/moderation/:path*", "/account", "/dashboard/:path*", "/reset-password", "/verify-email"].map(source => ({ source, headers: [
+    ] }, ...["/api/auth/:path*", "/api/account", "/api/saved-listings", "/api/advertiser-profile", "/api/listing-drafts", "/api/listing-drafts/:path*", "/api/submissions", "/api/submissions/:path*", "/api/publications", "/api/publications/:path*", "/api/moderation", "/api/moderation/:path*", "/account", "/dashboard/:path*", "/reset-password", "/verify-email"].map(source => ({ source, headers: [
       { key: "Referrer-Policy", value: "no-referrer" },
       { key: "Cache-Control", value: "no-store" },
       { key: "X-Robots-Tag", value: "noindex, nofollow" },
