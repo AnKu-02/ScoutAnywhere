@@ -1,0 +1,1 @@
+export default function Loading(){return <section className="container section" role="status">Loading Messages…</section>;}

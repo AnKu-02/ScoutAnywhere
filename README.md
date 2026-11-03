@@ -9,6 +9,7 @@ An India-focused housing marketplace, starting with Bengaluru and Mumbai. ScoutA
 - **Property discovery:** flatshares, rentals and sales, with filters, sorting, pagination, property details and itemized costs.
 - **Accounts:** email verification, sign-in/out, password reset and private account settings.
 - **Saved properties:** bookmarks that persist across sessions.
+- **Private Messages:** listing-linked seeker/advertiser conversations, unread filtering, waiting-for-reply awareness and dismissible 48-hour follow-up suggestions. Text only; no automatic reminders or outbound messaging.
 - **Advertiser profiles:** account-owned profiles with server-enforced permissions.
 - **Private listing drafts:** incomplete saves, category-specific forms, readiness checklists and private previews.
 - **Controlled publication:** explicitly granted operators publish exact approved snapshots into existing discovery and can unpublish with audit history. Approval never automatically publishes.
@@ -142,8 +143,10 @@ Phase 2.7 automated results and production limitations are recorded in `docs/pha
 
 ## Boundaries and future direction
 
-Identity/property verification, messaging, reviews, maps/geocoding, payments, AI and native apps are **not implemented**. PG Management is informational only. Active advertiser status and uploaded photographs do not establish authenticity, ownership or permission to advertise.
+Identity/property verification, reviews, maps/geocoding, payments, AI and native apps are **not implemented**. PG Management is informational only. Active advertiser status and uploaded photographs do not establish authenticity, ownership or permission to advertise.
 
 The longer-term vision includes trusted property discovery, advertiser verification, location-based search, messaging, reviews and locality insights. Each needs a separately scoped implementation.
+
+Phase 2.8 implements the deliberately limited in-app text messaging subset of that vision. See `docs/phase-2.8-messaging.md` for authorization, rate limits, unpublished-listing behavior, retention limitations, routes and manual acceptance. Run forward-only migrations before opening Messages. Live messaging is intentionally unavailable for fictional demo listings.
 
 This is not a production deployment. Before launch, complete manual acceptance, security/privacy review, durable storage setup, resource limits, monitoring, backups and recovery testing. The optional S3 adapter still needs live-provider validation. See the architecture and media documentation for details.

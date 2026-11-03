@@ -18,6 +18,7 @@ import { LocalPrivateStorage,type PrivateStorage } from "../src/modules/draft-me
 import { uploadPhoto,listMedia,retrievePhoto,removePhoto,arrangeMedia,cleanupMedia } from "../src/modules/draft-media/repository";
 import { submitDraft, readSubmission, decideSubmission, submittedPhoto, reviewQueue, ownSubmissions } from "../src/modules/submissions/repository";
 import { publishSubmission,unpublishSubmission,publicationPreview,publicationQueue,publicPhoto,publisherPhoto,cleanupPublicMedia,isPublisher } from "../src/modules/publications/repository";
+import { sendMessage,conversation,conversations,updateConversationState,contactTarget } from "../src/modules/messaging/repository";
 beforeAll(() => {
   if (!process.env.TEST_DATABASE_URL) throw new Error("Set TEST_DATABASE_URL to a migrated, seeded test database.");
   if (process.env.TEST_DATABASE_URL===process.env.DATABASE_URL) throw new Error("Test database must be separate from application database.");
@@ -53,6 +54,82 @@ describe("controlled approved-snapshot publication",()=>{
     // Immutable publication/audit linkage intentionally retains its synthetic originating account.
     await db()`DELETE FROM auth_user WHERE id IN (${moderator},${operator},${viewer})`;
     await db()`DELETE FROM account_capabilities WHERE user_id=${owner}`;
+  });
+  it("messaging creates exactly one conversation under concurrent sends and rejects self/demo/unpublished contact",async()=>{
+    const {submission}=await prepare(),p=await publishSubmission(operator,submission.id,action,storage),listingId=p.listingId!;
+    expect(await contactTarget(listingId,viewer)).toMatchObject({eligible:true,own:false,conversationId:null});
+    await expect(sendMessage(owner,{listingId,requestId:crypto.randomUUID(),text:"Self inquiry"})).rejects.toMatchObject({status:403});
+    const input={listingId,requestId:crypto.randomUUID(),text:"Is this home available?"};
+    const results=await Promise.all([sendMessage(viewer,input),sendMessage(viewer,input),sendMessage(viewer,{...input,requestId:crypto.randomUUID(),text:"Another detail"})]);
+    expect(new Set(results.map(r=>r.conversationId)).size).toBe(1);expect(results[0]).toEqual(results[1]);
+    const id=results[0].conversationId;
+    expect(await db()`SELECT id FROM conversations WHERE listing_id=${listingId} AND seeker_id=${viewer}`).toHaveLength(1);
+    expect((await conversation(viewer,id)).messages).toHaveLength(2);
+    expect(await contactTarget(listingId,viewer)).toMatchObject({conversationId:id});
+    await expect(sendMessage(viewer,{...input,text:"Changed retry"})).rejects.toMatchObject({status:409});
+    await expect(conversation(moderator,id)).rejects.toMatchObject({status:404});
+    await expect(sendMessage(moderator,{conversationId:id,requestId:crypto.randomUUID(),text:"Forged reply"})).rejects.toMatchObject({status:404});
+    await expect(updateConversationState(moderator,id,{action:"read",through:results[0].messageId})).rejects.toMatchObject({status:404});
+    await expect(db()`INSERT INTO conversation_messages(conversation_id,sender_id,request_id,body) VALUES (${id},${moderator},${crypto.randomUUID()},'Forged sender')`).rejects.toThrow();
+    const [demo]=await db()`SELECT id FROM listings WHERE is_demo LIMIT 1`;
+    await expect(sendMessage(viewer,{listingId:demo.id,requestId:crypto.randomUUID(),text:"Demo inquiry"})).rejects.toMatchObject({status:409});
+    await unpublishSubmission(operator,submission.id,{action:"unpublish",reason:"Synthetic messaging unavailable test"});
+    await expect(sendMessage(moderator,{listingId,requestId:crypto.randomUUID(),text:"Late inquiry"})).rejects.toMatchObject({status:409});
+    await expect(sendMessage(owner,{conversationId:id,requestId:crypto.randomUUID(),text:"Late reply"})).rejects.toMatchObject({status:409});
+    const history=await conversation(viewer,id);expect(history.conversation.property).toBeNull();expect(history.conversation.canSend).toBe(false);expect(history.messages).toHaveLength(2);expect(JSON.stringify(history)).not.toContain(submission.content.advertisement.title);
+    await cleanupPublicMedia(storage,100);
+  });
+  it("messaging calculates unread, first-unanswered reminders, dismissal and a later exchange reset",async()=>{
+    const {submission}=await prepare(),p=await publishSubmission(operator,submission.id,action,storage);
+    const first=await sendMessage(viewer,{listingId:p.listingId!,requestId:crypto.randomUUID(),text:"First unanswered"}),id=first.conversationId;
+    let seeker=await conversation(viewer,id),advertiser=await conversation(owner,id);
+    expect(seeker.conversation).toMatchObject({waiting:true,followUp:false,unread:false});expect(advertiser.conversation).toMatchObject({waiting:false,unread:true});
+    expect((await conversations(owner,1,true)).items.some(c=>c.id===id)).toBe(true);
+    await updateConversationState(owner,id,{action:"read",through:first.messageId});
+    expect((await conversation(owner,id)).conversation.unread).toBe(false);
+    await db()`UPDATE conversation_messages SET created_at=clock_timestamp()-interval '49 hours' WHERE id=${first.messageId}::bigint`;
+    expect((await conversation(viewer,id)).conversation.followUp).toBe(true);
+    await updateConversationState(viewer,id,{action:"dismiss",exchange:first.messageId});
+    await sendMessage(viewer,{conversationId:id,requestId:crypto.randomUUID(),text:"Second still unanswered"});
+    expect((await conversation(viewer,id)).conversation).toMatchObject({followUp:false,exchange:first.messageId});
+    const reply=await sendMessage(owner,{conversationId:id,requestId:crypto.randomUUID(),text:"Yes, happy to discuss."});
+    seeker=await conversation(viewer,id);expect(seeker.conversation).toMatchObject({waiting:false,followUp:false,unread:true});
+    await updateConversationState(viewer,id,{action:"read",through:reply.messageId});
+    await updateConversationState(viewer,id,{action:"read",through:first.messageId});
+    expect((await conversation(viewer,id)).conversation.unread).toBe(false);
+    const next=await sendMessage(viewer,{conversationId:id,requestId:crypto.randomUUID(),text:"A new question"});
+    await db()`UPDATE conversation_messages SET created_at=clock_timestamp()-interval '49 hours' WHERE id=${next.messageId}::bigint`;
+    seeker=await conversation(viewer,id);expect(seeker.conversation).toMatchObject({waiting:true,followUp:true,exchange:next.messageId});
+    await expect(updateConversationState(viewer,id,{action:"dismiss",exchange:first.messageId})).rejects.toMatchObject({status:409});
+    await expect(updateConversationState(owner,id,{action:"dismiss",exchange:next.messageId})).rejects.toMatchObject({status:404});
+    advertiser=await conversation(owner,id);expect(advertiser.conversation.property).toMatchObject({title:submission.content.advertisement.title,price:30000});expect(JSON.stringify(advertiser)).not.toContain('@example.test');
+  });
+  it("messaging suspensions stop sending but preserve history and do not grant permissions by profile type",async()=>{
+    const {submission}=await prepare(),p=await publishSubmission(operator,submission.id,action,storage),input={listingId:p.listingId!,requestId:crypto.randomUUID(),text:"Before suspension"},sent=await sendMessage(viewer,input);
+    const [profile]=await db()`SELECT advertiser_id FROM advertiser_profiles WHERE user_id=${owner}`;
+    try{
+      await db()`UPDATE advertiser_profiles SET status='suspended' WHERE advertiser_id=${profile.advertiser_id}`;
+      expect(await contactTarget(p.listingId!,moderator)).toMatchObject({eligible:false});
+      expect((await conversation(viewer,sent.conversationId)).conversation.canSend).toBe(false);
+      await expect(sendMessage(owner,{conversationId:sent.conversationId,requestId:crypto.randomUUID(),text:"Suspended reply"})).rejects.toMatchObject({status:409});
+      expect(await sendMessage(viewer,input)).toEqual(sent);
+    }finally{await db()`UPDATE advertiser_profiles SET status='active' WHERE advertiser_id=${profile.advertiser_id}`;}
+  });
+  it("messaging enforces persistent minute/day budgets and paginates history without gaps",async()=>{
+    const {submission}=await prepare(),p=await publishSubmission(operator,submission.id,action,storage);
+    await db()`DELETE FROM messaging_write_limits WHERE user_id=${viewer}`;
+    const sent=await sendMessage(viewer,{listingId:p.listingId!,requestId:crypto.randomUUID(),text:"Pagination first"}),id=sent.conversationId;
+    for(let i=0;i<55;i++){
+      await db()`UPDATE messaging_write_limits SET minute_started=clock_timestamp()-interval '2 minutes' WHERE user_id=${viewer}`;
+      await sendMessage(viewer,{conversationId:id,requestId:crypto.randomUUID(),text:`Message ${i}`});
+    }
+    const newest=await conversation(viewer,id);expect(newest.messages).toHaveLength(50);expect(newest.hasMore).toBe(true);
+    const older=await conversation(viewer,id,newest.messages[0].id);expect(older.messages).toHaveLength(6);expect(older.hasMore).toBe(false);expect(new Set([...older.messages,...newest.messages].map(m=>m.id)).size).toBe(56);
+    await db()`UPDATE messaging_write_limits SET minute_started=clock_timestamp(),minute_count=20 WHERE user_id=${viewer}`;
+    await expect(sendMessage(viewer,{conversationId:id,requestId:crypto.randomUUID(),text:"Limited"})).rejects.toMatchObject({status:429});
+    await db()`UPDATE messaging_write_limits SET minute_started=clock_timestamp()-interval '2 minutes',day_started=clock_timestamp(),day_count=200 WHERE user_id=${viewer}`;
+    await expect(sendMessage(viewer,{conversationId:id,requestId:crypto.randomUUID(),text:"Daily limited"})).rejects.toMatchObject({status:429});
+    await db()`DELETE FROM messaging_write_limits WHERE user_id=${viewer}`;
   });
   it("requires independent explicit publishing authority, not moderator/profile status",async()=>{
     const {submission}=await prepare();expect(await isPublisher(moderator)).toBe(false);

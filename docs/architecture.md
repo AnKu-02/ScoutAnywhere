@@ -1,5 +1,9 @@
 # Architecture
 
+## Phase 2.8 implemented update
+
+Private text messaging lives in `modules/messaging`, with advertisement-linked conversations, immutable participants, append-only application sends, participant-specific read watermarks and one dismissed unanswered-exchange ID. Published listing/profile/account relationships determine recipients exclusively on the server. Unpublishing removes all projected property context and pauses both participants' sends without removing private history. No scheduler, outbound reminders, notifications or realtime infrastructure is introduced. See `phase-2.8-messaging.md`; historical statements below that inquiry messaging is unavailable are superseded only for this scope.
+
 ## Phase 2.7 implemented update
 
 Controlled operator publication now consumes a specifically approved immutable snapshot, separately from moderation. See `phase-2.7-implementation.md` for the authoritative publisher capability, strict field mapping/canonical location blockers, public property/unit/listing linkage, deterministic media promotion, independent retention, unpublishing, audit and privacy limitations. Approval alone never publishes or verifies rights. Historical “publishing unavailable” statements below are superseded only for this separately authorized workflow. Execution results: `phase-2.7-validation.md`.

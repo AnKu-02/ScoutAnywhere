@@ -1,0 +1,15 @@
+import { describe,it,expect } from "vitest";
+import { followUpState,messageId,propertyContext,sendInput,stateInput } from "../src/modules/messaging/validation";
+import { accountDestination } from "../src/modules/auth/destination";
+const id='12345678-1234-4234-8234-123456789abc',at='2026-11-01T10:00:00.000Z';
+describe('private messaging contract',()=>{
+  it('accepts bounded trimmed plain text, including literal HTML',()=>{expect(sendInput.parse({listingId:1,requestId:id,text:'  <script>alert(1)</script>  '}).text).toBe('<script>alert(1)</script>');});
+  it.each(['','   ','a'.repeat(4001)])('rejects empty or oversized messages',text=>{expect(sendInput.safeParse({listingId:1,requestId:id,text}).success).toBe(false);});
+  it('rejects recipient/sender injection and ambiguous targets',()=>{for(const extra of [{recipientId:id},{senderId:id},{conversationId:id}])expect(sendInput.safeParse({listingId:1,requestId:id,text:'Hello',...extra}).success).toBe(false);});
+  it('requires idempotency and safe cursors',()=>{expect(sendInput.safeParse({listingId:1,text:'Hi'}).success).toBe(false);for(const cursor of ['0','-1','1e3','9223372036854775808'])expect(messageId.safeParse(cursor).success).toBe(false);expect(messageId.safeParse('9223372036854775807').success).toBe(true);});
+  it('waits only on actual unanswered seeker messages',()=>{expect(followUpState(true,'7',at,null,at)).toEqual({waiting:true,followUp:false});expect(followUpState(false,'7',at,null,'2026-11-05T10:00:00Z')).toEqual({waiting:false,followUp:false});expect(followUpState(true,null,null,null,at)).toEqual({waiting:false,followUp:false});});
+  it('uses the inclusive 48-hour server threshold',()=>{expect(followUpState(true,'7',at,null,'2026-11-03T09:59:59.999Z').followUp).toBe(false);expect(followUpState(true,'7',at,null,'2026-11-03T10:00:00Z').followUp).toBe(true);});
+  it('dismisses one exchange, not a later unanswered exchange',()=>{expect(followUpState(true,'7',at,'7','2026-11-06T10:00:00Z').followUp).toBe(false);expect(followUpState(true,'9',at,'7','2026-11-06T10:00:00Z').followUp).toBe(true);expect(stateInput.safeParse({action:'dismiss',exchange:'7',userId:'fake'}).success).toBe(false);});
+  it('removes all restricted property context on unpublishing',()=>{const context={id:1,title:'Home',city:'Bengaluru',locality:'HSR',price:100,category:'rent' as const,image:'/images/published/photo'};expect(propertyContext(false,context)).toBeNull();expect(propertyContext(true,context)).toEqual(context);});
+  it('allows only known safe internal messaging return destinations',()=>{for(const path of ['/dashboard/messages','/dashboard/messages?listing=1',`/dashboard/messages?conversation=${id}`])expect(accountDestination(path)).toBe(path);for(const path of ['//evil.test','https://evil.test','/dashboard/messages?listing=1&next=//evil.test','/dashboard/messages?listing=1#bad','/dashboard/messages?conversation=bad'])expect(accountDestination(path)).toBe('/dashboard');});
+});

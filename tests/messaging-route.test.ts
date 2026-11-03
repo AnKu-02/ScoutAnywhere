@@ -1,0 +1,20 @@
+import { beforeEach,describe,it,expect,vi } from 'vitest';
+vi.mock('../src/modules/auth/auth',()=>({authReady:vi.fn(()=>true)}));
+vi.mock('../src/modules/auth/session',()=>({currentSession:vi.fn()}));
+vi.mock('../src/modules/messaging/repository',()=>({conversation:vi.fn(),conversations:vi.fn(),sendMessage:vi.fn(),updateConversationState:vi.fn(),MessagingError:class extends Error{constructor(public status:number,message:string){super(message);}}}));
+import { currentSession } from '../src/modules/auth/session';
+import * as repository from '../src/modules/messaging/repository';
+import { messagingRequest } from '../src/modules/messaging/http';
+const origin='http://localhost:3000',id='12345678-1234-4234-8234-123456789abc';
+const request=(body:unknown,headers:Record<string,string>={},method='POST')=>new Request(`${origin}/api/messages`,{method,headers:{origin,'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+beforeEach(()=>{vi.clearAllMocks();process.env.BETTER_AUTH_URL=origin;vi.mocked(currentSession).mockResolvedValue({user:{id:'session-user'}} as never);});
+describe('messaging HTTP boundaries',()=>{
+  it('requires verified sessions and mutation origin',async()=>{vi.mocked(currentSession).mockResolvedValue(null);expect((await messagingRequest(new Request(origin))).status).toBe(401);expect((await messagingRequest(request({},{origin:'https://evil.test'}))).status).toBe(403);});
+  it('derives sender from session and makes responses private',async()=>{vi.mocked(repository.sendMessage).mockResolvedValue({conversationId:id,messageId:'1'});const input={listingId:1,requestId:id,text:'Hello'};const response=await messagingRequest(request(input));expect(response.status).toBe(200);expect(response.headers.get('Cache-Control')).toContain('no-store');expect(repository.sendMessage).toHaveBeenCalledWith('session-user',input);});
+  it('rejects injected identities before repository writes',async()=>{expect((await messagingRequest(request({listingId:1,requestId:id,text:'Hi',recipientId:'other'}))).status).toBe(400);expect(repository.sendMessage).not.toHaveBeenCalled();});
+  it('bounds bodies and requires JSON',async()=>{expect((await messagingRequest(request({text:'a'.repeat(25000)}))).status).toBe(413);expect((await messagingRequest(request({},{'Content-Type':'text/plain'}))).status).toBe(415);});
+  it('validates duplicate queries, IDs, cursors and pagination',async()=>{for(const query of ['?page=0','?page=1001','?filter=all&filter=unread','?userId=other'])expect((await messagingRequest(new Request(origin+query))).status).toBe(400);expect((await messagingRequest(new Request(origin),'bad')).status).toBe(404);expect((await messagingRequest(new Request(origin+'?before=-1'),id)).status).toBe(400);});
+  it('never exposes database errors or private data',async()=>{vi.mocked(repository.conversation).mockRejectedValueOnce(new Error('private email token'));const response=await messagingRequest(new Request(origin),id);expect(response.status).toBe(503);expect(await response.text()).not.toContain('token');});
+  it('preserves rate limits and cross-account denial',async()=>{vi.mocked(repository.sendMessage).mockRejectedValueOnce(new repository.MessagingError(429,'Sending limit reached.'));const response=await messagingRequest(request({listingId:1,requestId:id,text:'Hi'}));expect(response.status).toBe(429);expect(response.headers.get('Retry-After')).toBe('60');vi.mocked(repository.conversation).mockRejectedValueOnce(new repository.MessagingError(404,'Conversation not found.'));expect((await messagingRequest(new Request(origin),id)).status).toBe(404);});
+  it('scopes state writes to session and validates exchanges',async()=>{vi.mocked(repository.updateConversationState).mockResolvedValue({ok:true});expect((await messagingRequest(request({action:'read',through:'5'},{},'PATCH'),id)).status).toBe(200);expect(repository.updateConversationState).toHaveBeenCalledWith('session-user',id,{action:'read',through:'5'});expect((await messagingRequest(request({action:'dismiss',exchange:'0'},{},'PATCH'),id)).status).toBe(400);});
+});
